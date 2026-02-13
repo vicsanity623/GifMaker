@@ -216,7 +216,7 @@
 
         window.processImage = async function() {
             if (!originalFile) return;
-
+        
             const btn = document.getElementById('processBtn');
             const pBar = document.getElementById('progressBar');
             const pFill = document.getElementById('progressFill');
@@ -224,31 +224,38 @@
             btn.disabled = true;
             pBar.style.display = 'block';
             updateStatus("Downloading Model (Happens once)...");
-
+        
             try {
-                // Initialize config - point to public assets
+        
+                if (typeof removeBackground !== "function") {
+                    updateStatus("Background removal library failed to load.");
+                    btn.disabled = false;
+                    pBar.style.display = 'none';
+                    return;
+                }
+        
                 const config = {
                     progress: (key, current, total) => {
-                        if(total > 0) {
+                        if (total > 0) {
                             const percent = Math.round((current / total) * 100);
                             pFill.style.width = percent + "%";
                             updateStatus(`Downloading: ${percent}%`);
                         }
                     },
-                    // This library handles the model fetching internally
-                    debug: false 
+                    debug: false
                 };
-
+        
                 updateStatus("Processing...");
                 
-                // This function takes the file blob directly and returns a new blob (png)
-                const blob = await imglyBackgroundRemoval.removeBackground(originalFile, config);
+                const blob = await removeBackground(originalFile, config);
                 
                 resultBlob = blob;
                 const url = URL.createObjectURL(blob);
                 
                 const img = new Image();
                 img.onload = function() {
+                    canvas.width = img.width;
+                    canvas.height = img.height;
                     ctx.clearRect(0, 0, canvas.width, canvas.height);
                     ctx.drawImage(img, 0, 0);
                     updateStatus("Done!");
@@ -257,7 +264,7 @@
                     pBar.style.display = 'none';
                 };
                 img.src = url;
-
+        
             } catch (error) {
                 console.error(error);
                 updateStatus("Error: " + error.message);
@@ -265,6 +272,7 @@
                 pBar.style.display = 'none';
             }
         };
+
 
         window.downloadResult = function() {
             if(!resultBlob) return;
