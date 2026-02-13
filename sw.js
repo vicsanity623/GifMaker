@@ -1,7 +1,8 @@
 const CACHE_VERSION = 'morphframe-v1.0.2'; // INCREMENT THIS TO FORCE UPDATE
 const FILES_TO_CACHE = [
     './',
-    './index.html'
+    './index.html',
+    './manifest.json'
 ];
 
 // 1. INSTALL: Cache files and force immediate activation
