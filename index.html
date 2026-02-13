@@ -147,12 +147,12 @@
 </head>
 <body>
 
-    <span class="badge">Running ISNet (No Login Required)</span>
+    <span class="badge">Running Img.ly (Zero Config)</span>
     <h1>Object Extractor</h1>
-    <p>High quality background removal. No tokens needed.</p>
+    <p>Upload an image. No Tokens. No Logins. Just works.</p>
 
     <div class="container">
-        <div class="version-tag">App v1.0.8</div>
+        <div class="version-tag">App v1.0.9</div>
 
         <div class="toolbar">
             <button class="action-btn" onclick="document.getElementById('fileInput').click()">
@@ -181,33 +181,28 @@
         <div class="status-text" id="statusText">Ready</div>
     </div>
 
-    <script type="module">
-        import { pipeline, env } from 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.16.0';
+    <!-- Load imgly library from CDN (Not Hugging Face) -->
+    <script src="https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.0.10/dist/browser/index.min.js"></script>
 
-        // Disable cache to ensure fresh start
-        env.useBrowserCache = true;
-        env.allowLocalModels = false;
-
-        let active_pipeline = null;
-        // ISNet is excellent, specialized for segmentation, and PUBLIC.
-        const MODEL_ID = 'Xenova/isnet-general-use'; 
-        
+    <script>
         const canvas = document.getElementById('mainCanvas');
         const ctx = canvas.getContext('2d');
-        let originalImage = null; 
-        let processedCanvas = document.createElement('canvas'); 
+        let originalFile = null; 
+        let resultBlob = null;
 
         window.loadImage = function(event) {
             const file = event.target.files[0];
             if (!file) return;
 
+            originalFile = file;
+            
             const reader = new FileReader();
             reader.onload = function(e) {
                 const img = new Image();
                 img.onload = function() {
-                    originalImage = img;
                     canvas.width = img.width;
                     canvas.height = img.height;
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
                     ctx.drawImage(img, 0, 0);
                     
                     document.getElementById('processBtn').disabled = false;
@@ -220,7 +215,7 @@
         };
 
         window.processImage = async function() {
-            if (!originalImage) return;
+            if (!originalFile) return;
 
             const btn = document.getElementById('processBtn');
             const pBar = document.getElementById('progressBar');
@@ -228,32 +223,40 @@
             
             btn.disabled = true;
             pBar.style.display = 'block';
+            updateStatus("Downloading Model (Happens once)...");
 
             try {
-                if (!active_pipeline) {
-                    updateStatus("Connecting to model...");
-                    
-                    active_pipeline = await pipeline('image-segmentation', MODEL_ID, {
-                        progress_callback: (cb) => {
-                            if (cb.status === 'progress') {
-                                const percent = Math.round(cb.progress);
-                                pFill.style.width = percent + "%";
-                                updateStatus(`Downloading Model: ${percent}%`);
-                            }
+                // Initialize config - point to public assets
+                const config = {
+                    progress: (key, current, total) => {
+                        if(total > 0) {
+                            const percent = Math.round((current / total) * 100);
+                            pFill.style.width = percent + "%";
+                            updateStatus(`Downloading: ${percent}%`);
                         }
-                    });
-                }
+                    },
+                    // This library handles the model fetching internally
+                    debug: false 
+                };
 
-                updateStatus("Extracting object...");
-                pFill.style.width = "100%"; 
-
-                const result = await active_pipeline(originalImage.src);
-                await applyMask(result);
-
-                updateStatus("Done!");
-                document.getElementById('downloadBtn').disabled = false;
-                btn.disabled = false;
-                pBar.style.display = 'none';
+                updateStatus("Processing...");
+                
+                // This function takes the file blob directly and returns a new blob (png)
+                const blob = await imglyBackgroundRemoval.removeBackground(originalFile, config);
+                
+                resultBlob = blob;
+                const url = URL.createObjectURL(blob);
+                
+                const img = new Image();
+                img.onload = function() {
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    ctx.drawImage(img, 0, 0);
+                    updateStatus("Done!");
+                    document.getElementById('downloadBtn').disabled = false;
+                    btn.disabled = false;
+                    pBar.style.display = 'none';
+                };
+                img.src = url;
 
             } catch (error) {
                 console.error(error);
@@ -263,48 +266,19 @@
             }
         };
 
-        async function applyMask(maskObj) {
-            let maskSrc;
-            if (maskObj.toDataURL) {
-                maskSrc = maskObj.toDataURL();
-            } else if (maskObj.mask && maskObj.mask.toDataURL) {
-                maskSrc = maskObj.mask.toDataURL();
-            } else {
-                maskSrc = maskObj[0].mask.toDataURL();
-            }
-
-            const maskImage = new Image();
-            maskImage.src = maskSrc;
-            await new Promise(r => maskImage.onload = r);
-
-            processedCanvas.width = originalImage.width;
-            processedCanvas.height = originalImage.height;
-            const pCtx = processedCanvas.getContext('2d');
-
-            pCtx.drawImage(maskImage, 0, 0, processedCanvas.width, processedCanvas.height);
-            pCtx.globalCompositeOperation = 'source-in';
-            pCtx.drawImage(originalImage, 0, 0);
-            pCtx.globalCompositeOperation = 'source-over';
-
-            canvas.width = processedCanvas.width;
-            canvas.height = processedCanvas.height;
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            ctx.drawImage(processedCanvas, 0, 0);
-        }
-
         window.downloadResult = function() {
+            if(!resultBlob) return;
             const link = document.createElement('a');
             link.download = 'sticker-export.png';
-            link.href = processedCanvas.toDataURL('image/png');
+            link.href = URL.createObjectURL(resultBlob);
             link.click();
         };
 
         function updateStatus(msg) {
             document.getElementById('statusText').innerText = msg;
         }
-    </script>
 
-    <script>
+        // PWA Logic
         if ('serviceWorker' in navigator) {
             navigator.serviceWorker.register('./sw.js').then(registration => {
                 console.log('SW registered:', registration);
