@@ -43,7 +43,6 @@
             position: relative;
         }
 
-        /* Version Tag */
         .version-tag {
             position: absolute;
             top: 10px;
@@ -54,7 +53,40 @@
             opacity: 0.5;
         }
 
-        /* Toolbar */
+        /* Settings Area */
+        .settings-box {
+            background: #252525;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            border: 1px solid var(--border);
+        }
+        .settings-row {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-bottom: 10px;
+        }
+        label { font-size: 0.85rem; font-weight: 600; color: var(--text-muted); }
+        
+        select, input[type="text"] {
+            background: #121212;
+            border: 1px solid var(--border);
+            color: white;
+            padding: 10px;
+            border-radius: 6px;
+            width: 100%;
+            box-sizing: border-box;
+            font-size: 0.9rem;
+        }
+
+        .token-help {
+            font-size: 0.75rem;
+            color: #60a5fa;
+            margin-top: 4px;
+        }
+        .hidden { display: none; }
+
         .toolbar {
             display: flex;
             gap: 10px;
@@ -86,7 +118,6 @@
         button.primary:hover { background-color: var(--primary-hover); }
         button:disabled { opacity: 0.5; cursor: not-allowed; }
 
-        /* Canvas Area */
         .canvas-wrapper {
             position: relative;
             width: 100%;
@@ -114,7 +145,6 @@
 
         #fileInput { display: none; }
 
-        /* Progress Bar */
         .status-bar {
             margin-top: 20px;
             background: #252525;
@@ -151,13 +181,30 @@
 </head>
 <body>
 
-    <span class="badge">Running RMBG-1.4 (SOTA) locally</span>
+    <span class="badge" id="modelBadge">Running AI Locally</span>
     <h1>Object Extractor</h1>
-    <p>Upload an image. The AI will auto-detect the subject and remove the background.</p>
+    <p>Upload an image to remove the background.</p>
 
     <div class="container">
-        <!-- Visual Version Number -->
-        <div class="version-tag">App v1.0.2</div>
+        <div class="version-tag">App v1.0.4</div>
+
+        <!-- Settings Area -->
+        <div class="settings-box">
+            <div class="settings-row">
+                <label for="modelSelect">AI Model</label>
+                <select id="modelSelect" onchange="toggleTokenInput()">
+                    <option value="Xenova/modnet">ModNet (Fast, No Login, Good for People)</option>
+                    <option value="Xenova/rmbg-1.4">RMBG-1.4 (SOTA, Best Quality, Requires Token)</option>
+                </select>
+            </div>
+            <div class="settings-row hidden" id="tokenRow">
+                <label for="hfToken">Hugging Face Access Token (Read)</label>
+                <input type="text" id="hfToken" placeholder="hf_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx">
+                <div class="token-help">
+                    RMBG-1.4 requires a free token. <a href="https://huggingface.co/settings/tokens" target="_blank" style="color:#60a5fa">Get one here</a>.
+                </div>
+            </div>
+        </div>
 
         <div class="toolbar">
             <button onclick="document.getElementById('fileInput').click()">
@@ -186,18 +233,34 @@
         <div class="status-text" id="statusText">Ready</div>
     </div>
 
-    <!-- AI Logic -->
     <script type="module">
         import { pipeline, env } from 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.16.0';
 
         env.allowLocalModels = false;
         env.useBrowserCache = true;
 
-        let seg_pipeline = null;
+        let active_pipeline = null;
+        let active_model_id = "";
+        
         const canvas = document.getElementById('mainCanvas');
         const ctx = canvas.getContext('2d');
         let originalImage = null; 
         let processedCanvas = document.createElement('canvas'); 
+
+        // UI Logic for Token
+        window.toggleTokenInput = function() {
+            const select = document.getElementById('modelSelect');
+            const row = document.getElementById('tokenRow');
+            const badge = document.getElementById('modelBadge');
+            
+            if (select.value === 'Xenova/rmbg-1.4') {
+                row.classList.remove('hidden');
+                badge.innerText = "Selected: RMBG-1.4 (High Quality)";
+            } else {
+                row.classList.add('hidden');
+                badge.innerText = "Selected: ModNet (Fast)";
+            }
+        }
 
         window.loadImage = function(event) {
             const file = event.target.files[0];
@@ -211,7 +274,6 @@
                     canvas.width = img.width;
                     canvas.height = img.height;
                     ctx.drawImage(img, 0, 0);
-
                     document.getElementById('processBtn').disabled = false;
                     document.getElementById('downloadBtn').disabled = true;
                     updateStatus("Image loaded.");
@@ -227,14 +289,18 @@
             const btn = document.getElementById('processBtn');
             const pBar = document.getElementById('progressBar');
             const pFill = document.getElementById('progressFill');
-            
+            const modelId = document.getElementById('modelSelect').value;
+            const token = document.getElementById('hfToken').value.trim();
+
             btn.disabled = true;
             pBar.style.display = 'block';
 
             try {
-                if (!seg_pipeline) {
-                    updateStatus("Downloading Model (~170MB)...");
-                    seg_pipeline = await pipeline('image-segmentation', 'Xenova/rmbg-1.4', {
+                // Check if we need to load/reload pipeline
+                if (!active_pipeline || active_model_id !== modelId) {
+                    updateStatus(`Downloading ${modelId}...`);
+                    
+                    const pipelineOptions = {
                         progress_callback: (cb) => {
                             if (cb.status === 'progress') {
                                 const percent = Math.round(cb.progress);
@@ -242,13 +308,28 @@
                                 updateStatus(`Loading model: ${percent}%`);
                             }
                         }
-                    });
+                    };
+
+                    // Add auth token if RMBG is selected and token exists
+                    if (modelId === 'Xenova/rmbg-1.4') {
+                        if(token) {
+                            pipelineOptions.use_auth_token = token;
+                        } else {
+                            // Warn user but try anyway (will likely fail)
+                            if(!confirm("You selected RMBG-1.4 but didn't provide a Hugging Face Token. This will likely fail. Continue?")) {
+                                throw new Error("Token missing for RMBG-1.4");
+                            }
+                        }
+                    }
+
+                    active_pipeline = await pipeline('image-segmentation', modelId, pipelineOptions);
+                    active_model_id = modelId;
                 }
 
-                updateStatus("Removing background...");
+                updateStatus("Processing...");
                 pFill.style.width = "100%"; 
 
-                const result = await seg_pipeline(originalImage.src);
+                const result = await active_pipeline(originalImage.src);
                 await applyMask(result);
 
                 updateStatus("Done!");
@@ -260,12 +341,26 @@
                 console.error(error);
                 updateStatus("Error: " + error.message);
                 btn.disabled = false;
+                pBar.style.display = 'none';
             }
         };
 
         async function applyMask(maskObj) {
+            // Some models return different structures, verify mask
+            let maskSrc;
+            // ModNet returns { mask: Image } or similar, Transformers.js normalizes this usually
+            // but let's safely handle the blob conversion
+            if (maskObj.toDataURL) {
+                maskSrc = maskObj.toDataURL();
+            } else if (maskObj.mask && maskObj.mask.toDataURL) {
+                maskSrc = maskObj.mask.toDataURL();
+            } else {
+                // Fallback for raw tensor output if pipeline varies (rare in this task)
+                maskSrc = maskObj[0].mask.toDataURL();
+            }
+
             const maskImage = new Image();
-            maskImage.src = maskObj.toDataURL(); 
+            maskImage.src = maskSrc;
             await new Promise(r => maskImage.onload = r);
 
             processedCanvas.width = originalImage.width;
@@ -295,19 +390,14 @@
         }
     </script>
 
-    <!-- PWA Registration & Force Update Logic -->
     <script>
         if ('serviceWorker' in navigator) {
             navigator.serviceWorker.register('./sw.js').then(registration => {
                 console.log('SW registered:', registration);
-                
-                // If we are already being controlled by a SW, listen for controller changes
-                // This means a new SW has taken over (via skipWaiting + clients.claim)
                 navigator.serviceWorker.addEventListener('controllerchange', () => {
                     console.log('New version detected. Reloading...');
                     window.location.reload();
                 });
-
             }).catch(error => {
                 console.log('SW registration failed:', error);
             });
