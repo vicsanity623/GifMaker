@@ -15,8 +15,6 @@
             --text: #ffffff;
             --text-muted: #a1a1aa;
             --border: #333333;
-            --success: #10b981;
-            --error: #ef4444;
         }
 
         body {
@@ -55,71 +53,6 @@
             opacity: 0.5;
         }
 
-        /* Login / Settings Area */
-        .auth-box {
-            background: #252525;
-            padding: 15px;
-            border-radius: 8px;
-            margin-bottom: 20px;
-            border: 1px solid var(--border);
-        }
-        
-        .auth-header {
-            font-size: 0.9rem;
-            font-weight: 600;
-            margin-bottom: 10px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .input-group {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 10px;
-        }
-
-        input[type="text"], input[type="password"] {
-            background: #121212;
-            border: 1px solid var(--border);
-            color: white;
-            padding: 10px;
-            border-radius: 6px;
-            flex-grow: 1;
-            font-size: 0.9rem;
-        }
-
-        .verify-btn {
-            background: var(--primary);
-            color: white;
-            border: none;
-            padding: 0 15px;
-            border-radius: 6px;
-            font-weight: 600;
-            font-size: 0.85rem;
-        }
-        
-        .verify-msg {
-            font-size: 0.8rem;
-            padding: 8px;
-            border-radius: 4px;
-            display: none;
-        }
-        .verify-msg.success { background: rgba(16, 185, 129, 0.2); color: var(--success); display: block; }
-        .verify-msg.error { background: rgba(239, 68, 68, 0.2); color: var(--error); display: block; }
-
-        .steps-help {
-            font-size: 0.75rem;
-            color: var(--text-muted);
-            margin-top: 10px;
-            line-height: 1.5;
-            border-top: 1px solid var(--border);
-            padding-top: 10px;
-        }
-        .steps-help a { color: #60a5fa; text-decoration: none; }
-        .steps-help a:hover { text-decoration: underline; }
-
-        /* Main UI */
         .toolbar {
             display: flex;
             gap: 10px;
@@ -203,8 +136,8 @@
         
         .badge {
             display: inline-block;
-            background: rgba(59, 130, 246, 0.2);
-            color: #60a5fa;
+            background: rgba(16, 185, 129, 0.2);
+            color: #34d399;
             padding: 2px 8px;
             border-radius: 4px;
             font-size: 0.75rem;
@@ -214,38 +147,15 @@
 </head>
 <body>
 
-    <span class="badge">Running RMBG-1.4 (SOTA)</span>
+    <span class="badge">Running ISNet (No Login Required)</span>
     <h1>Object Extractor</h1>
-    <p>Please authenticate to use the high-quality sticker model.</p>
+    <p>High quality background removal. No tokens needed.</p>
 
     <div class="container">
-        <div class="version-tag">App v1.0.7</div>
+        <div class="version-tag">App v1.0.8</div>
 
-        <!-- Authentication Box -->
-        <div class="auth-box">
-            <div class="auth-header">
-                Hugging Face Authorization
-                <span id="authStatusIndicator" style="font-size: 1.2rem;">🔒</span>
-            </div>
-            
-            <div class="input-group">
-                <input type="password" id="hfToken" placeholder="Paste Access Token (hf_...)" autocomplete="off">
-                <button class="verify-btn" onclick="verifyToken()">Verify & Login</button>
-            </div>
-            
-            <div id="verifyMsg" class="verify-msg"></div>
-
-            <div class="steps-help">
-                <strong>How to fix "Unauthorized" errors:</strong><br>
-                1. <a href="https://huggingface.co/settings/tokens" target="_blank">Get a Token (Read permissions)</a>.<br>
-                2. <strong style="color:#ef4444">CRITICAL:</strong> Go to <a href="https://huggingface.co/briaai/RMBG-1.4" target="_blank">briaai/RMBG-1.4</a> and click <strong>"Agree and Access Repository"</strong>.<br>
-                3. Also go to <a href="https://huggingface.co/Xenova/rmbg-1.4" target="_blank">Xenova/rmbg-1.4</a> and click "Agree" if prompted.
-            </div>
-        </div>
-
-        <!-- Application UI (Initially Disabled) -->
         <div class="toolbar">
-            <button class="action-btn" id="uploadBtn" onclick="document.getElementById('fileInput').click()" disabled>
+            <button class="action-btn" onclick="document.getElementById('fileInput').click()">
                 <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
                 Upload
             </button>
@@ -268,86 +178,25 @@
         <div class="status-bar" id="progressBar">
             <div class="progress-fill" id="progressFill"></div>
         </div>
-        <div class="status-text" id="statusText">Waiting for login...</div>
+        <div class="status-text" id="statusText">Ready</div>
     </div>
 
     <script type="module">
         import { pipeline, env } from 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.16.0';
 
-        // Disable cache to prevent sticking to 401s
-        env.useBrowserCache = false;
+        // Disable cache to ensure fresh start
+        env.useBrowserCache = true;
         env.allowLocalModels = false;
 
         let active_pipeline = null;
-        const MODEL_ID = 'Xenova/rmbg-1.4';
+        // ISNet is excellent, specialized for segmentation, and PUBLIC.
+        const MODEL_ID = 'Xenova/isnet-general-use'; 
         
         const canvas = document.getElementById('mainCanvas');
         const ctx = canvas.getContext('2d');
         let originalImage = null; 
         let processedCanvas = document.createElement('canvas'); 
-        let validToken = null;
 
-        // 1. Startup Logic
-        window.addEventListener('DOMContentLoaded', () => {
-            const savedToken = localStorage.getItem('hf_token_v2');
-            if (savedToken) {
-                document.getElementById('hfToken').value = savedToken;
-                // Auto verify if token exists
-                verifyToken();
-            }
-        });
-
-        // 2. Verification Logic (The Manual Login you asked for)
-        window.verifyToken = async function() {
-            const token = document.getElementById('hfToken').value.trim();
-            const msgEl = document.getElementById('verifyMsg');
-            const ind = document.getElementById('authStatusIndicator');
-            
-            if (!token) {
-                msgEl.className = 'verify-msg error';
-                msgEl.innerText = "Please paste a token.";
-                return;
-            }
-
-            msgEl.style.display = 'block';
-            msgEl.className = 'verify-msg';
-            msgEl.innerText = "Verifying with Hugging Face API...";
-
-            try {
-                // We test against the config file specifically because that's what fails
-                // Using briaai/RMBG-1.4 to test the license agreement
-                const response = await fetch('https://huggingface.co/api/models/briaai/RMBG-1.4', {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-
-                if (response.status === 200) {
-                    // Success!
-                    validToken = token;
-                    localStorage.setItem('hf_token_v2', token);
-                    
-                    msgEl.className = 'verify-msg success';
-                    msgEl.innerText = "Login Successful! License confirmed.";
-                    ind.innerText = "✅";
-                    
-                    // Enable UI
-                    document.getElementById('uploadBtn').disabled = false;
-                    document.getElementById('statusText').innerText = "Ready to upload.";
-                    
-                } else if (response.status === 401 || response.status === 403) {
-                    msgEl.className = 'verify-msg error';
-                    msgEl.innerHTML = "Access Denied. <strong>You likely haven't clicked 'Agree' on the Hugging Face model page.</strong> <a href='https://huggingface.co/briaai/RMBG-1.4' target='_blank'>Click here</a>.";
-                    ind.innerText = "❌";
-                } else {
-                    throw new Error("Unknown error " + response.status);
-                }
-
-            } catch (e) {
-                msgEl.className = 'verify-msg error';
-                msgEl.innerText = "Connection Failed: " + e.message;
-            }
-        };
-
-        // 3. Image Logic
         window.loadImage = function(event) {
             const file = event.target.files[0];
             if (!file) return;
@@ -361,14 +210,9 @@
                     canvas.height = img.height;
                     ctx.drawImage(img, 0, 0);
                     
-                    // Only enable process if we have a verified token
-                    if (validToken) {
-                        document.getElementById('processBtn').disabled = false;
-                        updateStatus("Image loaded.");
-                    } else {
-                        updateStatus("Please Verify Token first.");
-                    }
+                    document.getElementById('processBtn').disabled = false;
                     document.getElementById('downloadBtn').disabled = true;
+                    updateStatus("Image loaded.");
                 };
                 img.src = e.target.result;
             };
@@ -376,7 +220,7 @@
         };
 
         window.processImage = async function() {
-            if (!originalImage || !validToken) return;
+            if (!originalImage) return;
 
             const btn = document.getElementById('processBtn');
             const pBar = document.getElementById('progressBar');
@@ -387,11 +231,9 @@
 
             try {
                 if (!active_pipeline) {
-                    updateStatus("Initializing AI Pipeline...");
+                    updateStatus("Connecting to model...");
                     
-                    // Pass the verified token specifically
                     active_pipeline = await pipeline('image-segmentation', MODEL_ID, {
-                        use_auth_token: validToken,
                         progress_callback: (cb) => {
                             if (cb.status === 'progress') {
                                 const percent = Math.round(cb.progress);
@@ -402,7 +244,7 @@
                     });
                 }
 
-                updateStatus("Removing background...");
+                updateStatus("Extracting object...");
                 pFill.style.width = "100%"; 
 
                 const result = await active_pipeline(originalImage.src);
@@ -416,13 +258,6 @@
             } catch (error) {
                 console.error(error);
                 updateStatus("Error: " + error.message);
-                
-                // If it fails here despite verification, it's likely a cache issue
-                if(error.message.includes("401")) {
-                     document.getElementById('verifyMsg').className = 'verify-msg error';
-                     document.getElementById('verifyMsg').innerText = "Session expired. Please click Verify again.";
-                }
-                
                 btn.disabled = false;
                 pBar.style.display = 'none';
             }
