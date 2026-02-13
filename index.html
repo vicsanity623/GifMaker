@@ -15,7 +15,6 @@
             --text: #ffffff;
             --text-muted: #a1a1aa;
             --border: #333333;
-            --success: #10b981;
         }
 
         body {
@@ -62,42 +61,16 @@
             margin-bottom: 20px;
             border: 1px solid var(--border);
         }
-        .settings-row {
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-            margin-bottom: 15px;
-        }
-        label { font-size: 0.85rem; font-weight: 600; color: var(--text-muted); }
         
-        select, input[type="text"] {
+        select {
             background: #121212;
             border: 1px solid var(--border);
             color: white;
             padding: 10px;
             border-radius: 6px;
             width: 100%;
-            box-sizing: border-box;
             font-size: 0.9rem;
         }
-
-        .token-input-group {
-            display: flex;
-            gap: 10px;
-        }
-        
-        .save-token-btn {
-            background: var(--border);
-            white-space: nowrap;
-        }
-
-        .token-help {
-            font-size: 0.75rem;
-            color: #60a5fa;
-            margin-top: 4px;
-            line-height: 1.4;
-        }
-        .hidden { display: none; }
 
         .toolbar {
             display: flex;
@@ -179,12 +152,11 @@
             text-align: center;
             min-height: 20px;
         }
-        .error-msg { color: #ef4444; }
-
+        
         .badge {
             display: inline-block;
-            background: rgba(59, 130, 246, 0.2);
-            color: #60a5fa;
+            background: rgba(16, 185, 129, 0.2);
+            color: #34d399;
             padding: 2px 8px;
             border-radius: 4px;
             font-size: 0.75rem;
@@ -194,34 +166,20 @@
 </head>
 <body>
 
-    <span class="badge" id="modelBadge">Running AI Locally</span>
+    <span class="badge" id="modelBadge">Running BiRefNet (No Token Needed)</span>
     <h1>Object Extractor</h1>
     <p>Upload an image to remove the background.</p>
 
     <div class="container">
-        <div class="version-tag">App v1.0.5</div>
+        <div class="version-tag">App v1.0.6</div>
 
         <!-- Settings Area -->
         <div class="settings-box">
-            <div class="settings-row">
-                <label for="modelSelect">AI Model</label>
-                <select id="modelSelect" onchange="toggleTokenInput()">
-                    <option value="Xenova/modnet">ModNet (Fast, No Login)</option>
-                    <option value="Xenova/rmbg-1.4">RMBG-1.4 (SOTA, Requires Token + License)</option>
-                </select>
-            </div>
-            
-            <div class="settings-row hidden" id="tokenRow">
-                <label for="hfToken">Hugging Face Access Token</label>
-                <div class="token-input-group">
-                    <input type="text" id="hfToken" placeholder="hf_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx">
-                    <button class="save-token-btn" onclick="saveToken()">Save</button>
-                </div>
-                <div class="token-help">
-                    1. <a href="https://huggingface.co/settings/tokens" target="_blank" style="color:#60a5fa">Get Token</a><br>
-                    2. <strong style="color: #ff9f9f">Important:</strong> You must visit <a href="https://huggingface.co/briaai/RMBG-1.4" target="_blank" style="color:#60a5fa">briaai/RMBG-1.4</a> and click "Agree and Access Repository".
-                </div>
-            </div>
+            <div style="margin-bottom:5px; font-size:0.85rem; font-weight:600; color:#a1a1aa">AI Model</div>
+            <select id="modelSelect">
+                <option value="Xenova/birefnet-general-lite">BiRefNet (Best Quality, No Token)</option>
+                <option value="Xenova/modnet">ModNet (Fastest, Lower Quality)</option>
+            </select>
         </div>
 
         <div class="toolbar">
@@ -254,8 +212,7 @@
     <script type="module">
         import { pipeline, env } from 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.16.0';
 
-        // Force browser to not cache 401 errors for models
-        env.useBrowserCache = false; 
+        env.useBrowserCache = true; 
         env.allowLocalModels = false;
 
         let active_pipeline = null;
@@ -265,38 +222,6 @@
         const ctx = canvas.getContext('2d');
         let originalImage = null; 
         let processedCanvas = document.createElement('canvas'); 
-
-        // Load saved token on startup
-        window.addEventListener('DOMContentLoaded', () => {
-            const savedToken = localStorage.getItem('hf_token');
-            if (savedToken) {
-                document.getElementById('hfToken').value = savedToken;
-            }
-            toggleTokenInput();
-        });
-
-        window.saveToken = function() {
-            const token = document.getElementById('hfToken').value.trim();
-            if (token) {
-                localStorage.setItem('hf_token', token);
-                updateStatus("Token saved to LocalStorage.");
-                setTimeout(() => updateStatus("Ready"), 2000);
-            }
-        };
-
-        window.toggleTokenInput = function() {
-            const select = document.getElementById('modelSelect');
-            const row = document.getElementById('tokenRow');
-            const badge = document.getElementById('modelBadge');
-            
-            if (select.value === 'Xenova/rmbg-1.4') {
-                row.classList.remove('hidden');
-                badge.innerText = "Selected: RMBG-1.4 (SOTA)";
-            } else {
-                row.classList.add('hidden');
-                badge.innerText = "Selected: ModNet (Fast)";
-            }
-        }
 
         window.loadImage = function(event) {
             const file = event.target.files[0];
@@ -326,41 +251,28 @@
             const pBar = document.getElementById('progressBar');
             const pFill = document.getElementById('progressFill');
             const modelId = document.getElementById('modelSelect').value;
-            // Get token from input OR localstorage
-            const token = document.getElementById('hfToken').value.trim() || localStorage.getItem('hf_token');
 
             btn.disabled = true;
             pBar.style.display = 'block';
-            updateStatus("Initializing...");
 
             try {
-                // If model changed or pipeline broken, reload
+                // Initialize Pipeline
                 if (!active_pipeline || active_model_id !== modelId) {
+                    updateStatus(`Connecting to ${modelId}...`);
                     
-                    const pipelineOptions = {
+                    active_pipeline = await pipeline('image-segmentation', modelId, {
                         progress_callback: (cb) => {
                             if (cb.status === 'progress') {
                                 const percent = Math.round(cb.progress);
                                 pFill.style.width = percent + "%";
-                                updateStatus(`Downloading model: ${percent}%`);
+                                updateStatus(`Downloading AI Model: ${percent}%`);
                             }
                         }
-                    };
-
-                    if (modelId === 'Xenova/rmbg-1.4') {
-                        if (!token) throw new Error("Token missing! Please enter Hugging Face token.");
-                        // Explicitly pass auth token
-                        pipelineOptions.use_auth_token = token;
-                    }
-
-                    updateStatus(`Connecting to ${modelId}...`);
-                    
-                    // Create pipeline with explicit options
-                    active_pipeline = await pipeline('image-segmentation', modelId, pipelineOptions);
+                    });
                     active_model_id = modelId;
                 }
 
-                updateStatus("Processing (this may take a moment)...");
+                updateStatus("Detecting subject & removing background...");
                 pFill.style.width = "100%"; 
 
                 const result = await active_pipeline(originalImage.src);
@@ -373,18 +285,7 @@
 
             } catch (error) {
                 console.error(error);
-                let msg = "Error: " + error.message;
-                
-                // Friendly error for 401
-                if (error.message.includes("401") || error.message.includes("Unauthorized")) {
-                    msg = "Unauthorized (401). 1. Check Token. 2. YOU MUST ACCEPT THE LICENSE AGREEMENT on Hugging Face website.";
-                }
-                
-                // Clear pipeline so we try fresh next time
-                active_pipeline = null;
-                
-                updateStatus(msg);
-                document.getElementById('statusText').classList.add('error-msg');
+                updateStatus("Error: " + error.message);
                 btn.disabled = false;
                 pBar.style.display = 'none';
             }
@@ -392,12 +293,16 @@
 
         async function applyMask(maskObj) {
             let maskSrc;
+            // BiRefNet/ModNet output handling
             if (maskObj.toDataURL) {
                 maskSrc = maskObj.toDataURL();
             } else if (maskObj.mask && maskObj.mask.toDataURL) {
                 maskSrc = maskObj.mask.toDataURL();
-            } else {
+            } else if (Array.isArray(maskObj) && maskObj[0].mask) {
                 maskSrc = maskObj[0].mask.toDataURL();
+            } else {
+                console.log("Unknown mask format", maskObj);
+                throw new Error("Cannot parse AI result");
             }
 
             const maskImage = new Image();
@@ -427,9 +332,7 @@
         };
 
         function updateStatus(msg) {
-            const el = document.getElementById('statusText');
-            el.innerText = msg;
-            el.classList.remove('error-msg');
+            document.getElementById('statusText').innerText = msg;
         }
     </script>
 
