@@ -15,7 +15,6 @@
             --text-muted: #a1a1aa;
             --border: #333333;
         }
-
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
             background-color: var(--bg);
@@ -27,10 +26,6 @@
             min-height: 100vh;
             padding: 20px;
         }
-
-        h1 { font-weight: 700; letter-spacing: -0.5px; margin-bottom: 5px; }
-        p { color: var(--text-muted); font-size: 0.9rem; margin-top: 0; }
-
         .container {
             width: 100%;
             max-width: 800px;
@@ -41,7 +36,6 @@
             box-shadow: 0 10px 30px rgba(0,0,0,0.5);
             position: relative;
         }
-
         .version-tag {
             position: absolute;
             top: 10px;
@@ -51,15 +45,13 @@
             font-family: monospace;
             opacity: 0.5;
         }
-
         .toolbar {
             display: flex;
             gap: 10px;
             margin-bottom: 20px;
             flex-wrap: wrap;
         }
-
-        button.action-btn {
+        button {
             background-color: var(--surface);
             border: 1px solid var(--border);
             color: var(--text);
@@ -67,14 +59,11 @@
             border-radius: 8px;
             cursor: pointer;
             font-weight: 500;
-            transition: all 0.2s;
             display: flex;
             align-items: center;
             gap: 8px;
         }
-
-        button.action-btn:hover { background-color: #2a2a2a; }
-        
+        button:hover { background-color: #2a2a2a; }
         button.primary {
             background-color: var(--primary);
             border-color: var(--primary);
@@ -82,18 +71,12 @@
         }
         button.primary:hover { background-color: var(--primary-hover); }
         button:disabled { opacity: 0.5; cursor: not-allowed; }
-
         .canvas-wrapper {
             position: relative;
             width: 100%;
             min-height: 400px;
-            background-image: 
-                linear-gradient(45deg, #2a2a2a 25%, transparent 25%), 
-                linear-gradient(-45deg, #2a2a2a 25%, transparent 25%), 
-                linear-gradient(45deg, transparent 75%, #2a2a2a 75%), 
-                linear-gradient(-45deg, transparent 75%, #2a2a2a 75%);
+            background-image: linear-gradient(45deg, #2a2a2a 25%, transparent 25%), linear-gradient(-45deg, #2a2a2a 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #2a2a2a 75%), linear-gradient(-45deg, transparent 75%, #2a2a2a 75%);
             background-size: 20px 20px;
-            background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
             border-radius: 8px;
             overflow: hidden;
             display: flex;
@@ -101,15 +84,12 @@
             align-items: center;
             border: 1px dashed var(--border);
         }
-
         canvas {
             max-width: 100%;
             max-height: 70vh;
             object-fit: contain;
         }
-
         #fileInput { display: none; }
-
         .status-bar {
             margin-top: 20px;
             background: #252525;
@@ -130,9 +110,7 @@
             font-size: 0.85rem;
             color: var(--text-muted);
             text-align: center;
-            min-height: 20px;
         }
-
         .badge {
             display: inline-block;
             background: rgba(167, 139, 250, 0.2);
@@ -146,23 +124,23 @@
 </head>
 <body>
 
-    <span class="badge">Connected to Cloud API (RMBG-1.4)</span>
+    <span class="badge">Running on Cloud (RMBG-1.4)</span>
     <h1>Object Extractor</h1>
-    <p>Upload an image. Processed via your private Hugging Face Space.</p>
+    <p>Using your custom Hugging Face Space API.</p>
 
     <div class="container">
-        <div class="version-tag">App v1.1.0</div>
+        <div class="version-tag">App v1.1.5</div>
 
         <div class="toolbar">
-            <button class="action-btn" onclick="document.getElementById('fileInput').click()">
+            <button onclick="document.getElementById('fileInput').click()">
                 <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
                 Upload
             </button>
-            <button class="action-btn primary" id="processBtn" onclick="processImage()" disabled>
+            <button class="primary" id="processBtn" onclick="processImage()" disabled>
                 <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.384-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"></path></svg>
                 Process
             </button>
-            <button class="action-btn" onclick="downloadResult()" id="downloadBtn" disabled>
+            <button onclick="downloadResult()" id="downloadBtn" disabled>
                 <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
                 Save
             </button>
@@ -180,28 +158,48 @@
         <div class="status-text" id="statusText">Ready</div>
     </div>
 
-    <!-- Official Gradio Client -->
+    <!-- PWA Service Worker Registration -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('./sw.js').then(reg => {
+                console.log('SW registered');
+                reg.addEventListener('updatefound', () => {
+                    const newWorker = reg.installing;
+                    newWorker.addEventListener('statechange', () => {
+                        if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                            window.location.reload();
+                        }
+                    });
+                });
+            });
+        }
+    </script>
+
+    <!-- App Logic -->
     <script type="module">
         import { Client } from "https://cdn.jsdelivr.net/npm/@gradio/client@0.1.4/dist/index.min.js";
 
+        // *** CONFIGURATION ***
+        const HF_SPACE_ID = "AIIntentionz/MorphFrame"; // Ensure this matches exactly
+        // *********************
+
         const canvas = document.getElementById('mainCanvas');
         const ctx = canvas.getContext('2d');
-        let originalFile = null; 
-        let resultUrl = null;
+        let originalFile = null;
+        let resultBlobUrl = null;
 
         window.loadImage = function(event) {
             const file = event.target.files[0];
             if (!file) return;
-
             originalFile = file;
-            
+
             const reader = new FileReader();
             reader.onload = function(e) {
                 const img = new Image();
                 img.onload = function() {
                     canvas.width = img.width;
                     canvas.height = img.height;
-                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    ctx.clearRect(0,0,canvas.width, canvas.height);
                     ctx.drawImage(img, 0, 0);
                     
                     document.getElementById('processBtn').disabled = false;
@@ -215,59 +213,58 @@
 
         window.processImage = async function() {
             if (!originalFile) return;
-        
+
             const btn = document.getElementById('processBtn');
             const pBar = document.getElementById('progressBar');
             const pFill = document.getElementById('progressFill');
-            
+
             btn.disabled = true;
             pBar.style.display = 'block';
-            pFill.style.width = "10%";
+            pFill.style.width = "5%";
             updateStatus("Connecting to Space...");
-        
+
             try {
-                // 1. Connect to your Space
-                const client = await Client.connect("AIIntentionz/MorphFrame");
+                // Connect to the public space
+                const client = await Client.connect(HF_SPACE_ID);
                 
                 pFill.style.width = "40%";
-                updateStatus("Sending image to Cloud GPU...");
+                updateStatus("Processing on Cloud GPU...");
 
-                // 2. Send the image to the prediction endpoint
-                // Note: Standard Gradio interfaces use "/predict"
+                // Call the prediction endpoint
                 const result = await client.predict("/predict", { 
                     image: originalFile, 
                 });
 
                 pFill.style.width = "90%";
-                updateStatus("Processing result...");
+                updateStatus("Downloading result...");
 
-                // 3. Handle the result
-                // result.data[0] typically contains the URL or blob of the processed image
                 if (result.data && result.data[0]) {
-                    const outputImage = result.data[0]; 
-                    
-                    // Display it
+                    // Gradio returns an object with url
+                    const outputData = result.data[0];
+                    let imageUrl = outputData.url || outputData;
+
+                    // Fetch blob to avoid CORS issues on export
+                    const resp = await fetch(imageUrl);
+                    const blob = await resp.blob();
+                    resultBlobUrl = URL.createObjectURL(blob);
+
                     const img = new Image();
-                    img.crossOrigin = "Anonymous"; // Important for canvas export
                     img.onload = function() {
                         canvas.width = img.width;
                         canvas.height = img.height;
-                        ctx.clearRect(0, 0, canvas.width, canvas.height);
+                        ctx.clearRect(0,0,canvas.width, canvas.height);
                         ctx.drawImage(img, 0, 0);
-                        
-                        // Store URL for download
-                        resultUrl = outputImage.url || outputImage;
 
                         updateStatus("Done!");
                         document.getElementById('downloadBtn').disabled = false;
                         btn.disabled = false;
                         pBar.style.display = 'none';
                     };
-                    img.src = outputImage.url || outputImage; // Gradio client returns object with .url usually
+                    img.src = resultBlobUrl;
                 } else {
-                    throw new Error("No data returned from API");
+                    throw new Error("Empty response from AI");
                 }
-        
+
             } catch (error) {
                 console.error(error);
                 updateStatus("Error: " + error.message);
@@ -276,40 +273,16 @@
             }
         };
 
-        window.downloadResult = async function() {
-            if(!resultUrl) return;
-
-            // We need to fetch the blob again to avoid security issues with cross-origin downloads
-            try {
-                const response = await fetch(resultUrl);
-                const blob = await response.blob();
-                const link = document.createElement('a');
-                link.download = 'sticker-export.png';
-                link.href = URL.createObjectURL(blob);
-                link.click();
-            } catch (e) {
-                // Fallback attempt
-                const link = document.createElement('a');
-                link.download = 'sticker-export.png';
-                link.href = resultUrl;
-                link.click();
-            }
+        window.downloadResult = function() {
+            if (!resultBlobUrl) return;
+            const link = document.createElement('a');
+            link.download = 'sticker.png';
+            link.href = resultBlobUrl;
+            link.click();
         };
 
         function updateStatus(msg) {
             document.getElementById('statusText').innerText = msg;
-        }
-
-        // PWA Auto-Updater
-        if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('./sw.js').then(registration => {
-                console.log('SW registered:', registration);
-                navigator.serviceWorker.addEventListener('controllerchange', () => {
-                    window.location.reload();
-                });
-            }).catch(error => {
-                console.log('SW registration failed:', error);
-            });
         }
     </script>
 </body>
