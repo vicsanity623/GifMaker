@@ -15,6 +15,7 @@
             --text: #ffffff;
             --text-muted: #a1a1aa;
             --border: #333333;
+            --success: #10b981;
         }
 
         body {
@@ -65,7 +66,7 @@
             display: flex;
             flex-direction: column;
             gap: 8px;
-            margin-bottom: 10px;
+            margin-bottom: 15px;
         }
         label { font-size: 0.85rem; font-weight: 600; color: var(--text-muted); }
         
@@ -80,10 +81,21 @@
             font-size: 0.9rem;
         }
 
+        .token-input-group {
+            display: flex;
+            gap: 10px;
+        }
+        
+        .save-token-btn {
+            background: var(--border);
+            white-space: nowrap;
+        }
+
         .token-help {
             font-size: 0.75rem;
             color: #60a5fa;
             margin-top: 4px;
+            line-height: 1.4;
         }
         .hidden { display: none; }
 
@@ -167,6 +179,7 @@
             text-align: center;
             min-height: 20px;
         }
+        .error-msg { color: #ef4444; }
 
         .badge {
             display: inline-block;
@@ -186,22 +199,27 @@
     <p>Upload an image to remove the background.</p>
 
     <div class="container">
-        <div class="version-tag">App v1.0.4</div>
+        <div class="version-tag">App v1.0.5</div>
 
         <!-- Settings Area -->
         <div class="settings-box">
             <div class="settings-row">
                 <label for="modelSelect">AI Model</label>
                 <select id="modelSelect" onchange="toggleTokenInput()">
-                    <option value="Xenova/modnet">ModNet (Fast, No Login, Good for People)</option>
-                    <option value="Xenova/rmbg-1.4">RMBG-1.4 (SOTA, Best Quality, Requires Token)</option>
+                    <option value="Xenova/modnet">ModNet (Fast, No Login)</option>
+                    <option value="Xenova/rmbg-1.4">RMBG-1.4 (SOTA, Requires Token + License)</option>
                 </select>
             </div>
+            
             <div class="settings-row hidden" id="tokenRow">
-                <label for="hfToken">Hugging Face Access Token (Read)</label>
-                <input type="text" id="hfToken" placeholder="hf_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx">
+                <label for="hfToken">Hugging Face Access Token</label>
+                <div class="token-input-group">
+                    <input type="text" id="hfToken" placeholder="hf_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx">
+                    <button class="save-token-btn" onclick="saveToken()">Save</button>
+                </div>
                 <div class="token-help">
-                    RMBG-1.4 requires a free token. <a href="https://huggingface.co/settings/tokens" target="_blank" style="color:#60a5fa">Get one here</a>.
+                    1. <a href="https://huggingface.co/settings/tokens" target="_blank" style="color:#60a5fa">Get Token</a><br>
+                    2. <strong style="color: #ff9f9f">Important:</strong> You must visit <a href="https://huggingface.co/briaai/RMBG-1.4" target="_blank" style="color:#60a5fa">briaai/RMBG-1.4</a> and click "Agree and Access Repository".
                 </div>
             </div>
         </div>
@@ -236,8 +254,9 @@
     <script type="module">
         import { pipeline, env } from 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.16.0';
 
+        // Force browser to not cache 401 errors for models
+        env.useBrowserCache = false; 
         env.allowLocalModels = false;
-        env.useBrowserCache = true;
 
         let active_pipeline = null;
         let active_model_id = "";
@@ -247,7 +266,24 @@
         let originalImage = null; 
         let processedCanvas = document.createElement('canvas'); 
 
-        // UI Logic for Token
+        // Load saved token on startup
+        window.addEventListener('DOMContentLoaded', () => {
+            const savedToken = localStorage.getItem('hf_token');
+            if (savedToken) {
+                document.getElementById('hfToken').value = savedToken;
+            }
+            toggleTokenInput();
+        });
+
+        window.saveToken = function() {
+            const token = document.getElementById('hfToken').value.trim();
+            if (token) {
+                localStorage.setItem('hf_token', token);
+                updateStatus("Token saved to LocalStorage.");
+                setTimeout(() => updateStatus("Ready"), 2000);
+            }
+        };
+
         window.toggleTokenInput = function() {
             const select = document.getElementById('modelSelect');
             const row = document.getElementById('tokenRow');
@@ -255,7 +291,7 @@
             
             if (select.value === 'Xenova/rmbg-1.4') {
                 row.classList.remove('hidden');
-                badge.innerText = "Selected: RMBG-1.4 (High Quality)";
+                badge.innerText = "Selected: RMBG-1.4 (SOTA)";
             } else {
                 row.classList.add('hidden');
                 badge.innerText = "Selected: ModNet (Fast)";
@@ -290,43 +326,41 @@
             const pBar = document.getElementById('progressBar');
             const pFill = document.getElementById('progressFill');
             const modelId = document.getElementById('modelSelect').value;
-            const token = document.getElementById('hfToken').value.trim();
+            // Get token from input OR localstorage
+            const token = document.getElementById('hfToken').value.trim() || localStorage.getItem('hf_token');
 
             btn.disabled = true;
             pBar.style.display = 'block';
+            updateStatus("Initializing...");
 
             try {
-                // Check if we need to load/reload pipeline
+                // If model changed or pipeline broken, reload
                 if (!active_pipeline || active_model_id !== modelId) {
-                    updateStatus(`Downloading ${modelId}...`);
                     
                     const pipelineOptions = {
                         progress_callback: (cb) => {
                             if (cb.status === 'progress') {
                                 const percent = Math.round(cb.progress);
                                 pFill.style.width = percent + "%";
-                                updateStatus(`Loading model: ${percent}%`);
+                                updateStatus(`Downloading model: ${percent}%`);
                             }
                         }
                     };
 
-                    // Add auth token if RMBG is selected and token exists
                     if (modelId === 'Xenova/rmbg-1.4') {
-                        if(token) {
-                            pipelineOptions.use_auth_token = token;
-                        } else {
-                            // Warn user but try anyway (will likely fail)
-                            if(!confirm("You selected RMBG-1.4 but didn't provide a Hugging Face Token. This will likely fail. Continue?")) {
-                                throw new Error("Token missing for RMBG-1.4");
-                            }
-                        }
+                        if (!token) throw new Error("Token missing! Please enter Hugging Face token.");
+                        // Explicitly pass auth token
+                        pipelineOptions.use_auth_token = token;
                     }
 
+                    updateStatus(`Connecting to ${modelId}...`);
+                    
+                    // Create pipeline with explicit options
                     active_pipeline = await pipeline('image-segmentation', modelId, pipelineOptions);
                     active_model_id = modelId;
                 }
 
-                updateStatus("Processing...");
+                updateStatus("Processing (this may take a moment)...");
                 pFill.style.width = "100%"; 
 
                 const result = await active_pipeline(originalImage.src);
@@ -339,23 +373,30 @@
 
             } catch (error) {
                 console.error(error);
-                updateStatus("Error: " + error.message);
+                let msg = "Error: " + error.message;
+                
+                // Friendly error for 401
+                if (error.message.includes("401") || error.message.includes("Unauthorized")) {
+                    msg = "Unauthorized (401). 1. Check Token. 2. YOU MUST ACCEPT THE LICENSE AGREEMENT on Hugging Face website.";
+                }
+                
+                // Clear pipeline so we try fresh next time
+                active_pipeline = null;
+                
+                updateStatus(msg);
+                document.getElementById('statusText').classList.add('error-msg');
                 btn.disabled = false;
                 pBar.style.display = 'none';
             }
         };
 
         async function applyMask(maskObj) {
-            // Some models return different structures, verify mask
             let maskSrc;
-            // ModNet returns { mask: Image } or similar, Transformers.js normalizes this usually
-            // but let's safely handle the blob conversion
             if (maskObj.toDataURL) {
                 maskSrc = maskObj.toDataURL();
             } else if (maskObj.mask && maskObj.mask.toDataURL) {
                 maskSrc = maskObj.mask.toDataURL();
             } else {
-                // Fallback for raw tensor output if pipeline varies (rare in this task)
                 maskSrc = maskObj[0].mask.toDataURL();
             }
 
@@ -386,7 +427,9 @@
         };
 
         function updateStatus(msg) {
-            document.getElementById('statusText').innerText = msg;
+            const el = document.getElementById('statusText');
+            el.innerText = msg;
+            el.classList.remove('error-msg');
         }
     </script>
 
@@ -395,7 +438,6 @@
             navigator.serviceWorker.register('./sw.js').then(registration => {
                 console.log('SW registered:', registration);
                 navigator.serviceWorker.addEventListener('controllerchange', () => {
-                    console.log('New version detected. Reloading...');
                     window.location.reload();
                 });
             }).catch(error => {
