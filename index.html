@@ -152,7 +152,7 @@
     <p>Upload an image. No Tokens. No Logins. Just works.</p>
 
     <div class="container">
-        <div class="version-tag">App v1.1.1</div>
+        <div class="version-tag">App v1.1.2</div>
 
         <div class="toolbar">
             <button class="action-btn" onclick="document.getElementById('fileInput').click()">
@@ -181,8 +181,11 @@
         <div class="status-text" id="statusText">Ready</div>
     </div>
 
-    <!-- Load imgly library from CDN (Not Hugging Face) -->
-    <script src="https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.0.10/dist/browser/index.min.js"></script>
+    <script type="module">
+        import { removeBackground } from "https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.0.10/dist/browser/index.js";
+    
+        window.removeBackground = removeBackground;
+    </script>
 
     <script>
         const canvas = document.getElementById('mainCanvas');
