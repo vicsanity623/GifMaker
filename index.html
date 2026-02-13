@@ -2,596 +2,749 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>MorphFrame Studio</title>
-    <!-- Tailwind CSS for UI -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="theme-color" content="#09090b">
+    <link rel="manifest" href="manifest.json">
+    <title>MorphFrame SOTA</title>
+    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <!-- GIF.js library -->
+    <!-- GIF.js -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/gif.js/0.2.0/gif.js"></script>
-    
+
     <style>
-        /* Custom Styles for App-like feel */
-        body { touch-action: none; overscroll-behavior: none; background-color: #121212; color: #e0e0e0; }
-        .canvas-container { 
-            background-image: 
-                linear-gradient(45deg, #1e1e1e 25%, transparent 25%), 
-                linear-gradient(-45deg, #1e1e1e 25%, transparent 25%), 
-                linear-gradient(45deg, transparent 75%, #1e1e1e 75%), 
-                linear-gradient(-45deg, transparent 75%, #1e1e1e 75%);
-            background-size: 20px 20px;
-            background-position: 0 0, 0 10px, 10px -10px, -10px 0px; 
+        /* Modern App Reset */
+        :root { --app-bg: #09090b; --panel-bg: #18181b; --accent: #3b82f6; }
+        body { 
+            background-color: var(--app-bg); color: #e4e4e7; 
+            touch-action: none; overscroll-behavior: none; user-select: none; -webkit-user-select: none;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
         }
-        .scrollbar-hide::-webkit-scrollbar { display: none; }
-        .frame-thumb.active { border: 2px solid #3b82f6; transform: scale(1.05); }
-        input[type=range] { accent-color: #3b82f6; }
         
-        /* Mobile Layout Adjustments */
-        @media (max-width: 768px) {
-            .app-layout { flex-direction: column; }
-            .sidebar { width: 100% !important; height: auto; padding: 10px; order: 3; flex-direction: row; overflow-x: auto; }
-            .main-stage { height: 60vh; order: 1; }
-            .timeline-area { order: 2; height: 100px; }
-            .tool-group { margin-right: 15px; margin-bottom: 0; }
+        /* Canvas Stage */
+        #stage-container {
+            background-image: radial-gradient(#27272a 1px, transparent 1px);
+            background-size: 20px 20px;
+            overflow: hidden;
+            touch-action: none;
         }
+        canvas { 
+            image-rendering: pixelated; 
+            box-shadow: 0 20px 50px -12px rgba(0, 0, 0, 0.5);
+            transform-origin: 0 0;
+        }
+
+        /* UI Elements */
+        .glass-panel { background: rgba(24, 24, 27, 0.85); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border-top: 1px solid #27272a; }
+        .frame-thumb { transition: transform 0.1s; }
+        .frame-thumb.active { border: 2px solid var(--accent); transform: scale(1.05); z-index: 10; }
+        
+        /* Sliders */
+        input[type=range] {
+            -webkit-appearance: none; width: 100%; background: transparent;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none; height: 16px; width: 16px; border-radius: 50%; background: var(--accent); margin-top: -6px; box-shadow: 0 0 10px rgba(59, 130, 246, 0.5);
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%; height: 4px; background: #3f3f46; border-radius: 2px;
+        }
+
+        /* Loading Spinner */
+        .loader { border: 3px solid rgba(255,255,255,0.1); border-left-color: var(--accent); border-radius: 50%; width: 24px; height: 24px; animation: spin 1s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
     </style>
 </head>
-<body class="h-screen w-screen overflow-hidden flex flex-col font-sans">
+<body class="h-[100dvh] w-screen flex flex-col overflow-hidden relative">
 
-    <!-- Header -->
-    <header class="h-12 bg-zinc-900 border-b border-zinc-800 flex items-center justify-between px-4 z-20">
-        <div class="font-bold text-lg tracking-wider text-blue-500"><i class="fa-solid fa-layer-group"></i> MORPH<span class="text-white">FRAME</span></div>
-        <button id="exportBtn" class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-1 rounded text-sm font-bold transition">
-            <i class="fa-solid fa-download"></i> EXPORT GIF
+    <!-- Top Navigation -->
+    <header class="h-14 flex items-center justify-between px-4 z-50 glass-panel border-b border-zinc-800">
+        <div class="flex items-center gap-3">
+             <!-- File Input Hidden -->
+            <input type="file" id="fileInput" class="hidden" accept="image/*,video/mp4">
+            <button onclick="document.getElementById('fileInput').click()" class="text-zinc-400 hover:text-white transition">
+                <i class="fa-solid fa-folder-open text-xl"></i>
+            </button>
+            <div class="h-6 w-[1px] bg-zinc-700 mx-1"></div>
+            <button id="undoBtn" class="text-zinc-400 hover:text-white transition"><i class="fa-solid fa-rotate-left"></i></button>
+            <button id="redoBtn" class="text-zinc-400 hover:text-white transition"><i class="fa-solid fa-rotate-right"></i></button>
+        </div>
+        
+        <div class="font-bold text-sm tracking-widest text-blue-500">MORPH<span class="text-white">FRAME</span></div>
+        
+        <button id="exportBtn" class="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded-full text-xs font-bold shadow-lg shadow-blue-900/20 flex items-center gap-2">
+            <span>EXPORT</span> <i class="fa-solid fa-share-from-square"></i>
         </button>
     </header>
 
-    <!-- Main Layout -->
-    <div class="app-layout flex flex-1 overflow-hidden relative">
-
-        <!-- Left Sidebar (Files) -->
-        <aside class="sidebar w-64 bg-zinc-900 border-r border-zinc-800 flex flex-col p-4 gap-4 z-10 shadow-lg">
-            <div class="tool-group">
-                <h3 class="text-xs font-bold text-zinc-500 uppercase mb-2">Project</h3>
-                <label class="block w-full cursor-pointer bg-zinc-800 hover:bg-zinc-700 text-center py-3 rounded border border-zinc-700 transition">
-                    <i class="fa-solid fa-file-import mb-1 block text-xl"></i>
-                    <span class="text-xs">Import Media</span>
-                    <input type="file" id="fileInput" class="hidden" accept="image/*,video/mp4">
-                </label>
-                <div class="text-[10px] text-zinc-500 mt-1 text-center">JPG, PNG, GIF, MP4 (Max 10s)</div>
+    <!-- Main Canvas Area -->
+    <main id="stage-container" class="flex-1 relative flex items-center justify-center cursor-move">
+        <div id="canvas-wrapper" class="relative origin-top-left will-change-transform">
+            <canvas id="mainCanvas"></canvas>
+            <div id="gesture-hint" class="absolute inset-0 pointer-events-none hidden flex items-center justify-center">
+                <div class="bg-black/70 text-white px-3 py-1 rounded text-xs backdrop-blur">Two fingers to pan/zoom</div>
             </div>
+        </div>
 
-            <div class="tool-group">
-                <h3 class="text-xs font-bold text-zinc-500 uppercase mb-2">Actions</h3>
-                <button id="clearBtn" class="w-full bg-red-900/30 text-red-400 border border-red-900/50 py-2 rounded text-xs hover:bg-red-900/50">
-                    <i class="fa-solid fa-trash"></i> Reset Project
-                </button>
+        <!-- Video Controls Overlay -->
+        <div id="video-overlay" class="absolute bottom-4 left-0 right-0 flex justify-center gap-4 pointer-events-none opacity-0 transition-opacity">
+            <div class="bg-black/60 backdrop-blur-md rounded-full px-4 py-2 flex gap-4 pointer-events-auto">
+                <button id="playBtn" class="text-white hover:text-blue-400"><i class="fa-solid fa-play"></i></button>
+                <button id="stopBtn" class="text-white hover:text-red-400"><i class="fa-solid fa-stop"></i></button>
+                <span id="frameCounter" class="text-xs text-zinc-400 font-mono self-center">0/0</span>
             </div>
+        </div>
+        
+        <!-- Loading Overlay -->
+        <div id="loader" class="absolute inset-0 bg-black/80 backdrop-blur-sm flex flex-col items-center justify-center z-50 hidden">
+            <div class="loader mb-3"></div>
+            <span id="loaderText" class="text-xs font-mono text-zinc-400">PROCESSING</span>
+        </div>
+    </main>
+
+    <!-- Bottom Interface -->
+    <footer class="z-40 flex flex-col bg-zinc-900 border-t border-zinc-800 shadow-2xl">
+        
+        <!-- Timeline Strip -->
+        <div class="h-20 bg-[#121214] flex items-center gap-2 px-2 overflow-x-auto overflow-y-hidden scrollbar-hide border-b border-zinc-800" id="timeline">
+            <!-- Frames injected here -->
+        </div>
+
+        <!-- Tool Settings (Context Aware) -->
+        <div id="tool-settings" class="h-12 px-4 flex items-center gap-4 text-xs border-b border-zinc-800 bg-[#18181b]">
+            <div class="flex items-center gap-2 w-1/2">
+                <i class="fa-solid fa-circle-dot text-zinc-500 text-[10px]"></i>
+                <input type="range" id="sizeSlider" min="10" max="200" value="50">
+            </div>
+            <div class="flex items-center gap-2 w-1/2">
+                <i class="fa-solid fa-bolt text-zinc-500 text-[10px]"></i>
+                <input type="range" id="strengthSlider" min="1" max="100" value="60">
+            </div>
+             <div class="flex items-center gap-2 border-l border-zinc-700 pl-3">
+                 <input type="checkbox" id="onionToggle" class="accent-blue-500">
+                 <span class="text-[10px] text-zinc-400">GHOST</span>
+            </div>
+        </div>
+
+        <!-- Toolbar -->
+        <div class="h-16 pb-safe flex items-center justify-around px-2 glass-panel">
+            <button class="tool-btn flex flex-col items-center gap-1 text-zinc-400 p-2" data-tool="move">
+                <i class="fa-solid fa-up-down-left-right text-xl"></i>
+                <span class="text-[9px] uppercase">Pan/Zoom</span>
+            </button>
+            <button class="tool-btn flex flex-col items-center gap-1 text-zinc-400 p-2" data-tool="smudge">
+                <i class="fa-solid fa-hand-pointer text-xl"></i>
+                <span class="text-[9px] uppercase">Smudge</span>
+            </button>
             
-            <div class="tool-group hidden" id="videoControls">
-                <h3 class="text-xs font-bold text-zinc-500 uppercase mb-2">Playback</h3>
-                <div class="flex gap-2 justify-center">
-                    <button id="playBtn" class="bg-zinc-700 w-full py-2 rounded hover:bg-zinc-600"><i class="fa-solid fa-play"></i></button>
-                    <button id="stopBtn" class="bg-zinc-700 w-full py-2 rounded hover:bg-zinc-600"><i class="fa-solid fa-stop"></i></button>
-                </div>
-            </div>
-        </aside>
-
-        <!-- Center Stage (Canvas) -->
-        <main class="main-stage flex-1 bg-zinc-950 flex flex-col relative z-0">
-            <div class="flex-1 canvas-container flex items-center justify-center overflow-hidden relative">
-                <canvas id="mainCanvas" class="shadow-2xl bg-white max-w-[95%] max-h-[95%] cursor-crosshair"></canvas>
-                
-                <!-- Loading Overlay -->
-                <div id="loader" class="absolute inset-0 bg-black/80 flex flex-col items-center justify-center z-50 hidden">
-                    <i class="fa-solid fa-circle-notch fa-spin text-4xl text-blue-500 mb-2"></i>
-                    <span id="loaderText" class="text-sm">Processing...</span>
-                </div>
-            </div>
-
-            <!-- Bottom Timeline -->
-            <div class="timeline-area h-32 bg-zinc-900 border-t border-zinc-800 flex flex-col">
-                <div class="h-8 bg-zinc-800 px-2 flex items-center justify-between text-xs">
-                    <span class="text-zinc-400">Timeline <span id="frameCount">0f</span></span>
-                    <div class="flex gap-2">
-                        <button id="dupFrameBtn" class="hover:text-white text-zinc-400"><i class="fa-solid fa-copy"></i> Duplicate</button>
-                        <button id="delFrameBtn" class="hover:text-red-400 text-zinc-400"><i class="fa-solid fa-trash-can"></i> Delete</button>
-                    </div>
-                </div>
-                <div id="timelineContainer" class="flex-1 flex gap-2 p-2 overflow-x-auto scrollbar-hide items-center">
-                    <!-- Frame thumbnails injected here -->
-                </div>
-            </div>
-        </main>
-
-        <!-- Right Sidebar (Tools) -->
-        <aside class="sidebar w-64 bg-zinc-900 border-l border-zinc-800 flex flex-col p-4 gap-4 z-10 shadow-lg">
+            <!-- The Killer Feature: Jiggle/Bounce -->
+            <button class="tool-btn flex flex-col items-center gap-1 text-zinc-400 p-2 active text-blue-500" data-tool="bulge">
+                <i class="fa-solid fa-bullseye text-xl"></i>
+                <span class="text-[9px] uppercase font-bold">Jiggle/Pop</span>
+            </button>
             
-            <div class="tool-group">
-                <h3 class="text-xs font-bold text-zinc-500 uppercase mb-2">Tools</h3>
-                <div class="grid grid-cols-2 gap-2">
-                    <button class="tool-btn active bg-blue-600 text-white p-2 rounded" data-tool="smudge">
-                        <i class="fa-solid fa-hand-pointer block text-lg"></i>
-                        <span class="text-[10px]">Morph/Smudge</span>
-                    </button>
-                    <button class="tool-btn bg-zinc-800 text-zinc-400 hover:bg-zinc-700 p-2 rounded" data-tool="brush">
-                        <i class="fa-solid fa-paintbrush block text-lg"></i>
-                        <span class="text-[10px]">Brush</span>
-                    </button>
-                </div>
-            </div>
+            <button class="tool-btn flex flex-col items-center gap-1 text-zinc-400 p-2" data-tool="pinch">
+                <i class="fa-solid fa-compress-arrows-alt text-xl"></i>
+                <span class="text-[9px] uppercase">Shrink</span>
+            </button>
 
-            <div class="tool-group">
-                <h3 class="text-xs font-bold text-zinc-500 uppercase mb-2">Settings</h3>
-                
-                <div class="mb-3">
-                    <label class="text-[10px] flex justify-between">Size <span id="sizeVal">20</span></label>
-                    <input type="range" id="brushSize" min="5" max="100" value="30" class="w-full h-1 bg-zinc-700 rounded-lg appearance-none cursor-pointer">
-                </div>
-                
-                <div class="mb-3">
-                    <label class="text-[10px] flex justify-between">Strength <span id="strengthVal">50%</span></label>
-                    <input type="range" id="brushStrength" min="1" max="100" value="50" class="w-full h-1 bg-zinc-700 rounded-lg appearance-none cursor-pointer">
-                </div>
+            <div class="w-[1px] h-8 bg-zinc-700 mx-1"></div>
 
-                <div class="flex items-center justify-between bg-zinc-800 p-2 rounded">
-                    <span class="text-xs">Onion Skin</span>
-                    <input type="checkbox" id="onionSkin" class="w-4 h-4">
-                </div>
-                
-                <div class="flex items-center justify-between bg-zinc-800 p-2 rounded mt-2">
-                    <span class="text-xs">Color</span>
-                    <input type="color" id="colorPicker" value="#ff0000" class="w-6 h-6 border-none bg-transparent">
-                </div>
-            </div>
-            
-             <div class="tool-group">
-                <h3 class="text-xs font-bold text-zinc-500 uppercase mb-2">GIF Speed</h3>
-                <div class="mb-3">
-                    <label class="text-[10px] flex justify-between">Delay (ms) <span id="delayVal">100</span></label>
-                    <input type="range" id="gifDelay" min="20" max="500" step="10" value="100" class="w-full h-1 bg-zinc-700 rounded-lg appearance-none cursor-pointer">
-                </div>
-            </div>
-        </aside>
+            <button id="dupFrame" class="flex flex-col items-center gap-1 text-zinc-400 hover:text-white p-2">
+                <i class="fa-solid fa-copy text-xl"></i>
+                <span class="text-[9px] uppercase">Clone</span>
+            </button>
+             <button id="delFrame" class="flex flex-col items-center gap-1 text-zinc-400 hover:text-red-500 p-2">
+                <i class="fa-solid fa-trash text-xl"></i>
+                <span class="text-[9px] uppercase">Del</span>
+            </button>
+        </div>
+    </footer>
 
-    </div>
-
-    <!-- Hidden Video Element for processing -->
+    <!-- Hidden Video Processor -->
     <video id="tempVideo" class="hidden" muted playsinline></video>
 
     <script>
-        // --- State Management ---
-        const state = {
-            frames: [], // Array of ImageData
-            currentFrameIndex: -1,
-            tool: 'smudge',
-            brushSize: 30,
-            brushStrength: 0.5,
-            brushColor: '#ff0000',
+        // PWA Registration
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('./sw.js').catch(() => {});
+        }
+
+        /* --- CORE ENGINE --- */
+        const App = {
+            canvas: document.getElementById('mainCanvas'),
+            ctx: null,
+            width: 600,
+            height: 600,
+            frames: [],
+            history: [], // For undo/redo
+            historyIndex: -1,
+            currentFrame: 0,
+            
+            // Viewport
+            scale: 1,
+            panX: 0,
+            panY: 0,
+            
+            // Tool State
+            tool: 'bulge', // move, smudge, bulge, pinch
+            brushSize: 50,
+            strength: 0.6,
+            isDrawing: false,
+            lastPos: { x: 0, y: 0 },
+            
+            // Settings
             onionSkin: false,
+            playSpeed: 100,
             isPlaying: false,
             playInterval: null,
-            gifDelay: 100,
-            isDragging: false,
-            lastMouse: { x: 0, y: 0 },
-            canvasScale: 1
+
+            init() {
+                this.ctx = this.canvas.getContext('2d', { willReadFrequently: true });
+                this.resizeCanvas(600, 600);
+                this.ctx.fillStyle = "#ffffff";
+                this.ctx.fillRect(0,0,600,600);
+                
+                // Initial State
+                this.frames.push(this.ctx.getImageData(0,0,600,600));
+                this.saveHistory();
+                this.renderTimeline();
+                this.updateTransform();
+                
+                this.setupEvents();
+            },
+
+            resizeCanvas(w, h) {
+                // Max dimensions to prevent crash on mobile
+                const MAX = 1200;
+                let r = 1;
+                if(w > MAX || h > MAX) r = Math.min(MAX/w, MAX/h);
+                
+                this.width = Math.floor(w * r);
+                this.height = Math.floor(h * r);
+                this.canvas.width = this.width;
+                this.canvas.height = this.height;
+                
+                // Recenter view
+                const container = document.getElementById('stage-container');
+                const cw = container.clientWidth;
+                const ch = container.clientHeight;
+                
+                this.scale = Math.min((cw - 40)/this.width, (ch - 40)/this.height);
+                this.panX = (cw - this.width * this.scale) / 2;
+                this.panY = (ch - this.height * this.scale) / 2;
+                this.updateTransform();
+            },
+
+            updateTransform() {
+                const wrap = document.getElementById('canvas-wrapper');
+                wrap.style.transform = `translate(${this.panX}px, ${this.panY}px) scale(${this.scale})`;
+            },
+
+            /* --- HISTORY (UNDO/REDO) --- */
+            saveHistory() {
+                // We save the entire frame set state. 
+                // Optimization: In a huge app, we'd diff. Here, deep clone is safer.
+                const state = {
+                    frames: this.frames.map(f => {
+                        const c = new ImageData(
+                            new Uint8ClampedArray(f.data),
+                            f.width, f.height
+                        );
+                        return c;
+                    }),
+                    current: this.currentFrame
+                };
+
+                // Remove redo history if we are in middle
+                if (this.historyIndex < this.history.length - 1) {
+                    this.history = this.history.slice(0, this.historyIndex + 1);
+                }
+                
+                this.history.push(state);
+                if(this.history.length > 20) this.history.shift(); // Limit 20
+                this.historyIndex = this.history.length - 1;
+                this.updateUndoUI();
+            },
+
+            undo() {
+                if (this.historyIndex > 0) {
+                    this.historyIndex--;
+                    this.restoreHistory();
+                }
+            },
+
+            redo() {
+                if (this.historyIndex < this.history.length - 1) {
+                    this.historyIndex++;
+                    this.restoreHistory();
+                }
+            },
+
+            restoreHistory() {
+                const state = this.history[this.historyIndex];
+                // Deep restore
+                this.frames = state.frames.map(f => new ImageData(new Uint8ClampedArray(f.data), f.width, f.height));
+                this.currentFrame = state.current;
+                this.loadFrame(this.currentFrame);
+                this.renderTimeline();
+                this.updateUndoUI();
+            },
+
+            updateUndoUI() {
+                document.getElementById('undoBtn').style.opacity = this.historyIndex > 0 ? 1 : 0.3;
+                document.getElementById('redoBtn').style.opacity = this.historyIndex < this.history.length - 1 ? 1 : 0.3;
+            },
+
+            /* --- FILE IMPORT --- */
+            async handleFile(file) {
+                const loader = document.getElementById('loader');
+                loader.classList.remove('hidden');
+
+                if(file.type.startsWith('video')) {
+                    const video = document.getElementById('tempVideo');
+                    video.src = URL.createObjectURL(file);
+                    video.onloadeddata = async () => {
+                        this.resizeCanvas(video.videoWidth, video.videoHeight);
+                        this.frames = [];
+                        
+                        const dur = Math.min(video.duration, 10); // Cap 10s
+                        const fps = 8; // Mobile friendly FPS
+                        const count = Math.floor(dur * fps);
+                        
+                        for(let i=0; i<count; i++) {
+                            video.currentTime = i / fps;
+                            await new Promise(r => video.onseeked = r);
+                            this.ctx.drawImage(video, 0, 0, this.width, this.height);
+                            this.frames.push(this.ctx.getImageData(0,0,this.width, this.height));
+                            document.getElementById('loaderText').innerText = `FRAME ${i}/${count}`;
+                        }
+                        this.finishImport();
+                    }
+                } else {
+                    const img = new Image();
+                    img.onload = () => {
+                        this.resizeCanvas(img.width, img.height);
+                        this.ctx.drawImage(img, 0, 0, this.width, this.height);
+                        this.frames = [this.ctx.getImageData(0,0,this.width, this.height)];
+                        this.finishImport();
+                    };
+                    img.src = URL.createObjectURL(file);
+                }
+            },
+
+            finishImport() {
+                this.currentFrame = 0;
+                this.history = []; this.historyIndex = -1; // Reset history
+                this.saveHistory();
+                this.loadFrame(0);
+                this.renderTimeline();
+                document.getElementById('loader').classList.add('hidden');
+                document.getElementById('video-overlay').style.opacity = 1;
+            },
+
+            /* --- RENDERING --- */
+            loadFrame(idx) {
+                if(idx < 0 || idx >= this.frames.length) return;
+                this.currentFrame = idx;
+                
+                // Clear
+                this.ctx.clearRect(0,0,this.width, this.height);
+                
+                // Onion Skin
+                if(this.onionSkin && idx > 0) {
+                    this.ctx.globalAlpha = 0.3;
+                    const temp = document.createElement('canvas');
+                    temp.width = this.width; temp.height = this.height;
+                    temp.getContext('2d').putImageData(this.frames[idx-1], 0, 0);
+                    this.ctx.drawImage(temp, 0, 0);
+                    this.ctx.globalAlpha = 1.0;
+                }
+
+                this.ctx.putImageData(this.frames[idx], 0, 0);
+                
+                // Highlight UI
+                const thumbs = document.querySelectorAll('.frame-thumb');
+                thumbs.forEach((t, i) => {
+                    if(i===idx) {
+                        t.classList.add('active');
+                        t.scrollIntoView({behavior: "smooth", inline: "center"});
+                    } else t.classList.remove('active');
+                });
+                
+                document.getElementById('frameCounter').innerText = `${idx+1}/${this.frames.length}`;
+            },
+
+            /* --- TIMELINE --- */
+            renderTimeline() {
+                const container = document.getElementById('timeline');
+                container.innerHTML = '';
+                
+                this.frames.forEach((f, i) => {
+                    const div = document.createElement('div');
+                    div.className = `frame-thumb min-w-[60px] h-[60px] bg-zinc-800 rounded-md overflow-hidden relative cursor-pointer border border-zinc-700 ${i===this.currentFrame?'active':''}`;
+                    
+                    const c = document.createElement('canvas');
+                    c.width = this.width; c.height = this.height;
+                    c.className = "w-full h-full object-contain";
+                    c.getContext('2d').putImageData(f, 0, 0);
+                    
+                    div.appendChild(c);
+                    div.onclick = () => { if(!this.isPlaying) this.loadFrame(i); };
+                    container.appendChild(div);
+                });
+            },
+
+            /* --- TOOLS & PHYSICS ENGINE --- */
+            
+            // Convert Screen Coords to Canvas Coords
+            getCoords(e) {
+                const rect = this.canvas.getBoundingClientRect();
+                // We can't just use rect because of transforms.
+                // Inverse map:
+                let clientX = e.touches ? e.touches[0].clientX : e.clientX;
+                let clientY = e.touches ? e.touches[0].clientY : e.clientY;
+                
+                return {
+                    x: (clientX - this.panX) / this.scale,
+                    y: (clientY - this.panY) / this.scale
+                };
+            },
+
+            applyTool(x, y) {
+                if (this.tool === 'move') return;
+
+                if (this.tool === 'smudge') {
+                    // Simple smudge
+                    const dist = Math.hypot(x - this.lastPos.x, y - this.lastPos.y);
+                    const angle = Math.atan2(y - this.lastPos.y, x - this.lastPos.x);
+                    const steps = Math.ceil(dist / 2);
+                    for(let i=0; i<steps; i++) {
+                        const t = i/steps;
+                        const cx = this.lastPos.x + (x - this.lastPos.x)*t;
+                        const cy = this.lastPos.y + (y - this.lastPos.y)*t;
+                        
+                        this.ctx.drawImage(
+                            this.canvas, 
+                            cx - this.brushSize/2, cy - this.brushSize/2, this.brushSize, this.brushSize,
+                            cx - this.brushSize/2 + Math.cos(angle)*2, cy - this.brushSize/2 + Math.sin(angle)*2, this.brushSize, this.brushSize
+                        );
+                    }
+                } 
+                else if (this.tool === 'bulge' || this.tool === 'pinch') {
+                    // SOTA Jiggle Physics (Radial Displacement)
+                    this.applyDistortion(x, y, this.tool === 'bulge' ? 1 : -1);
+                }
+            },
+
+            // The "Bounce" / "Jiggle" Logic
+            applyDistortion(cx, cy, type) {
+                // Get pixel data for the brush area
+                const r = parseInt(this.brushSize);
+                const s = parseFloat(this.strength); // 0 to 1
+                
+                const startX = Math.max(0, Math.floor(cx - r));
+                const startY = Math.max(0, Math.floor(cy - r));
+                const w = Math.min(this.width - startX, r * 2);
+                const h = Math.min(this.height - startY, r * 2);
+                
+                if (w <= 0 || h <= 0) return;
+
+                const imgData = this.ctx.getImageData(startX, startY, w, h);
+                const data = imgData.data;
+                const copy = new Uint8ClampedArray(data); // Source copy
+                
+                // Iterate relative to center of brush
+                const centerX = cx - startX;
+                const centerY = cy - startY;
+
+                for (let y = 0; y < h; y++) {
+                    for (let x = 0; x < w; x++) {
+                        const dx = x - centerX;
+                        const dy = y - centerY;
+                        const dist = Math.sqrt(dx*dx + dy*dy);
+                        
+                        if (dist < r) {
+                            // Calculate displacement
+                            // Effect curve: Quadratic falloff (1 - dist/r)^2
+                            const effect = Math.pow(1 - dist/r, 2) * s * (type === 1 ? 0.5 : 0.5); 
+                            
+                            // Bulge: Source is closer to center (pull out)
+                            // Pinch: Source is further (pull in)
+                            // To look at destination pixel (x,y), where did it come from?
+                            // Bulge: comes from inner. Pinch: comes from outer.
+                            
+                            let srcX, srcY;
+
+                            if (type === 1) { 
+                                // Bulge (Magnify) - Look closer to center
+                                srcX = x - dx * effect; 
+                                srcY = y - dy * effect;
+                            } else {
+                                // Pinch (Shrink) - Look further away
+                                srcX = x + dx * effect;
+                                srcY = y + dy * effect;
+                            }
+
+                            // Bilinear Interpolation for smoothness
+                            const x0 = Math.floor(srcX); const x1 = x0 + 1;
+                            const y0 = Math.floor(srcY); const y1 = y0 + 1;
+                            
+                            // Clamp
+                            if (x0 >= 0 && x1 < w && y0 >= 0 && y1 < h) {
+                                const wx = srcX - x0;
+                                const wy = srcY - y0;
+                                
+                                const dstIdx = (y * w + x) * 4;
+                                const i00 = (y0 * w + x0) * 4;
+                                const i10 = (y0 * w + x1) * 4;
+                                const i01 = (y1 * w + x0) * 4;
+                                const i11 = (y1 * w + x1) * 4;
+
+                                for (let c = 0; c < 4; c++) { // R,G,B,A
+                                    const val = 
+                                        copy[i00+c]*(1-wx)*(1-wy) +
+                                        copy[i10+c]*wx*(1-wy) +
+                                        copy[i01+c]*(1-wx)*wy +
+                                        copy[i11+c]*wx*wy;
+                                    data[dstIdx+c] = val;
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                this.ctx.putImageData(imgData, startX, startY);
+            },
+
+            setupEvents() {
+                // Event Listeners
+                let pointers = []; // for multitouch
+                let initialDist = 0;
+                let initialScale = 1;
+
+                const down = (e) => {
+                    if (e.target.closest('button')) return;
+                    
+                    if (e.pointerType === 'touch') {
+                        pointers.push(e);
+                        if(pointers.length === 2) {
+                            // Start Pinch
+                            const dx = pointers[0].clientX - pointers[1].clientX;
+                            const dy = pointers[0].clientY - pointers[1].clientY;
+                            initialDist = Math.hypot(dx, dy);
+                            initialScale = this.scale;
+                            return; 
+                        }
+                    }
+
+                    if (pointers.length === 1 || e.pointerType === 'mouse') {
+                        this.isDrawing = true;
+                        // Important: Check tool. If move tool, we just prep drag
+                        // If drawing tool, we setup canvas path
+                        const coords = this.getCoords(e);
+                        this.lastPos = coords;
+                        
+                        if(this.tool !== 'move') {
+                            this.ctx.save(); // Save context state before stroke
+                            // Apply single click effect immediately (for dotting)
+                            this.applyTool(coords.x, coords.y);
+                        }
+                    }
+                };
+
+                const move = (e) => {
+                    if (e.pointerType === 'touch') {
+                        // Update pointer cache
+                        const idx = pointers.findIndex(p => p.pointerId === e.pointerId);
+                        if(idx >= 0) pointers[idx] = e;
+
+                        // PINCH / PAN Logic
+                        if(pointers.length === 2) {
+                            // Calculate center point for Pan
+                            const midX = (pointers[0].clientX + pointers[1].clientX) / 2;
+                            const midY = (pointers[0].clientY + pointers[1].clientY) / 2;
+                            
+                            // Calculate Zoom
+                            const dx = pointers[0].clientX - pointers[1].clientX;
+                            const dy = pointers[0].clientY - pointers[1].clientY;
+                            const dist = Math.hypot(dx, dy);
+                            
+                            const scaleDiff = dist / initialDist;
+                            this.scale = Math.min(Math.max(0.2, initialScale * scaleDiff), 5); // Limit zoom 0.2x to 5x
+                            
+                            // Simple Pan for now (improving this logic requires storing initial midPoint)
+                            // A real pan implementation is complex with zoom. 
+                            // We will simply allow free panning via dragging with 2 fingers
+                            // But usually pinch centers zoom.
+                            // Let's stick to updating scale.
+                            
+                            this.updateTransform();
+                            return; 
+                        }
+                    }
+
+                    if (!this.isDrawing) return;
+
+                    if (this.tool === 'move' || pointers.length === 2) {
+                         // Pan logic
+                         this.panX += e.movementX;
+                         this.panY += e.movementY;
+                         this.updateTransform();
+                    } else {
+                        // Drawing logic
+                        const coords = this.getCoords(e);
+                        this.applyTool(coords.x, coords.y);
+                        this.lastPos = coords;
+                    }
+                };
+
+                const up = (e) => {
+                    if(e.pointerType === 'touch') {
+                        pointers = pointers.filter(p => p.pointerId !== e.pointerId);
+                    }
+                    if(this.isDrawing) {
+                        this.isDrawing = false;
+                        if(this.tool !== 'move') {
+                            // Commit frame to memory
+                            this.frames[this.currentFrame] = this.ctx.getImageData(0,0,this.width, this.height);
+                            this.renderTimeline(); // update thumb
+                            this.saveHistory(); // Save for undo
+                        }
+                    }
+                };
+
+                const zone = document.getElementById('stage-container');
+                zone.addEventListener('pointerdown', down);
+                window.addEventListener('pointermove', move);
+                window.addEventListener('pointerup', up);
+                window.addEventListener('pointercancel', up);
+
+                // Wheel zoom for desktop
+                zone.addEventListener('wheel', (e) => {
+                    e.preventDefault();
+                    const delta = e.deltaY > 0 ? 0.9 : 1.1;
+                    this.scale = Math.min(Math.max(0.2, this.scale * delta), 5);
+                    this.updateTransform();
+                });
+            }
         };
 
-        // --- DOM Elements ---
-        const canvas = document.getElementById('mainCanvas');
-        const ctx = canvas.getContext('2d', { willReadFrequently: true });
-        const timeline = document.getElementById('timelineContainer');
-        const fileInput = document.getElementById('fileInput');
-        const videoEl = document.getElementById('tempVideo');
-        const loader = document.getElementById('loader');
-        const loaderText = document.getElementById('loaderText');
+        /* --- UI WIRING --- */
+        document.getElementById('fileInput').addEventListener('change', e => App.handleFile(e.target.files[0]));
+        document.getElementById('onionToggle').addEventListener('change', e => { App.onionSkin = e.target.checked; App.loadFrame(App.currentFrame); });
         
-        // --- Initialization ---
-        function init() {
-            // Set initial canvas size
-            canvas.width = 600;
-            canvas.height = 400;
-            ctx.fillStyle = "#ffffff";
-            ctx.fillRect(0,0,600,400);
-            
-            // Create one blank frame
-            saveCurrentStateAsNewFrame();
-            renderTimeline();
-        }
+        document.getElementById('sizeSlider').addEventListener('input', e => App.brushSize = parseInt(e.target.value));
+        document.getElementById('strengthSlider').addEventListener('input', e => App.strength = parseInt(e.target.value)/100);
 
-        // --- File Handling ---
-        fileInput.addEventListener('change', async (e) => {
-            const file = e.target.files[0];
-            if (!file) return;
-
-            showLoader(true, "Importing...");
-
-            if (file.type.startsWith('image')) {
-                const img = new Image();
-                img.onload = () => {
-                    resizeCanvasToFit(img.width, img.height);
-                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-                    state.frames = []; // Reset frames
-                    saveCurrentStateAsNewFrame();
-                    renderTimeline();
-                    showLoader(false);
-                };
-                img.src = URL.createObjectURL(file);
-            } 
-            else if (file.type.startsWith('video')) {
-                const url = URL.createObjectURL(file);
-                videoEl.src = url;
-                videoEl.onloadeddata = () => {
-                    processVideoToFrames(videoEl);
-                };
-            }
-        });
-
-        function resizeCanvasToFit(w, h) {
-            // Max dimension constraint for performance
-            const MAX_DIM = 800;
-            let scale = 1;
-            if (w > MAX_DIM || h > MAX_DIM) {
-                scale = Math.min(MAX_DIM / w, MAX_DIM / h);
-            }
-            canvas.width = w * scale;
-            canvas.height = h * scale;
-        }
-
-        async function processVideoToFrames(video) {
-            showLoader(true, "Processing Video...");
-            state.frames = [];
-            
-            resizeCanvasToFit(video.videoWidth, video.videoHeight);
-            
-            const duration = video.duration;
-            const frameRate = 5; // Sample 5 frames per second for simplicity/performance
-            const totalFrames = Math.min(duration * frameRate, 50); // Cap at 50 frames
-            const interval = duration / totalFrames;
-
-            for (let i = 0; i < totalFrames; i++) {
-                video.currentTime = i * interval;
-                await new Promise(r => video.onseeked = r);
-                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                state.frames.push(ctx.getImageData(0, 0, canvas.width, canvas.height));
-                loaderText.innerText = `Extracting ${i}/${Math.floor(totalFrames)}`;
-            }
-
-            state.currentFrameIndex = 0;
-            loadFrame(0);
-            renderTimeline();
-            showLoader(false);
-            document.getElementById('videoControls').classList.remove('hidden');
-        }
-
-        // --- Timeline Logic ---
-        function saveCurrentStateAsNewFrame() {
-            const data = ctx.getImageData(0, 0, canvas.width, canvas.height);
-            state.frames.push(data);
-            state.currentFrameIndex = state.frames.length - 1;
-        }
-
-        function updateCurrentFrame() {
-            if (state.currentFrameIndex >= 0 && state.frames[state.currentFrameIndex]) {
-                state.frames[state.currentFrameIndex] = ctx.getImageData(0, 0, canvas.width, canvas.height);
-                updateThumbnail(state.currentFrameIndex);
-            }
-        }
-
-        function loadFrame(index) {
-            if (index < 0 || index >= state.frames.length) return;
-            state.currentFrameIndex = index;
-            
-            // Clear
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-            // Onion Skin
-            if (state.onionSkin && index > 0) {
-                ctx.globalAlpha = 0.3;
-                ctx.putImageData(state.frames[index - 1], 0, 0); // Note: putImageData doesn't respect alpha directly the same way drawImage does, but usually obscures. 
-                // For true onion skin with putImageData, we'd need a temp canvas. 
-                // Simpler workaround: Draw previous frame to temp canvas, draw temp canvas with opacity.
-                const tempC = document.createElement('canvas');
-                tempC.width = canvas.width; tempC.height = canvas.height;
-                tempC.getContext('2d').putImageData(state.frames[index-1], 0, 0);
-                ctx.drawImage(tempC, 0, 0);
-                ctx.globalAlpha = 1.0;
-            }
-
-            // Draw Current Frame
-            // We need to handle transparent layers for onion skin, so we draw current frame on top
-            if(state.onionSkin && index > 0) {
-                 const tempC = document.createElement('canvas');
-                tempC.width = canvas.width; tempC.height = canvas.height;
-                tempC.getContext('2d').putImageData(state.frames[index], 0, 0);
-                ctx.drawImage(tempC, 0, 0);
-            } else {
-                 ctx.putImageData(state.frames[index], 0, 0);
-            }
-            
-            highlightFrame(index);
-        }
-
-        function renderTimeline() {
-            timeline.innerHTML = '';
-            document.getElementById('frameCount').innerText = `${state.frames.length}f`;
-            
-            state.frames.forEach((frameData, idx) => {
-                const wrap = document.createElement('div');
-                wrap.className = `frame-thumb min-w-[80px] h-[80px] bg-black border border-zinc-700 cursor-pointer relative ${idx === state.currentFrameIndex ? 'active' : ''}`;
-                
-                // create thumbnail
-                const thumbC = document.createElement('canvas');
-                thumbC.width = canvas.width;
-                thumbC.height = canvas.height;
-                thumbC.className = "w-full h-full object-contain";
-                const tCtx = thumbC.getContext('2d');
-                tCtx.putImageData(frameData, 0, 0);
-                
-                wrap.appendChild(thumbC);
-                wrap.onclick = () => {
-                     updateCurrentFrame(); // Save changes to current before switching
-                     loadFrame(idx);
-                };
-
-                const num = document.createElement('div');
-                num.innerText = idx + 1;
-                num.className = "absolute bottom-0 right-0 bg-black/50 text-[10px] px-1 text-white";
-                wrap.appendChild(num);
-
-                timeline.appendChild(wrap);
-            });
-        }
-
-        function updateThumbnail(index) {
-            const thumbs = timeline.children;
-            if(thumbs[index]) {
-                const thumbCanvas = thumbs[index].querySelector('canvas');
-                const tCtx = thumbCanvas.getContext('2d');
-                tCtx.putImageData(state.frames[index], 0, 0);
-            }
-        }
-
-        function highlightFrame(index) {
-            Array.from(timeline.children).forEach((el, i) => {
-                if(i === index) el.classList.add('active');
-                else el.classList.remove('active');
-            });
-            // scroll into view
-            timeline.children[index]?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
-        }
-
-        // --- Editor Tools (Smudge & Brush) ---
-
-        // Helper: Get mouse pos relative to canvas
-        function getPos(e) {
-            const rect = canvas.getBoundingClientRect();
-            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-            return {
-                x: (clientX - rect.left) * (canvas.width / rect.width),
-                y: (clientY - rect.top) * (canvas.height / rect.height)
-            };
-        }
-
-        function startStroke(e) {
-            state.isDragging = true;
-            state.lastMouse = getPos(e);
-            
-            if (state.tool === 'brush') {
-                ctx.beginPath();
-                ctx.moveTo(state.lastMouse.x, state.lastMouse.y);
-            }
-        }
-
-        function endStroke() {
-            if(state.isDragging) {
-                state.isDragging = false;
-                updateCurrentFrame(); // Commit changes to timeline array
-            }
-        }
-
-        function moveStroke(e) {
-            if (!state.isDragging) return;
-            e.preventDefault(); // Stop scrolling on mobile
-
-            const mouse = getPos(e);
-
-            if (state.tool === 'brush') {
-                ctx.lineTo(mouse.x, mouse.y);
-                ctx.strokeStyle = state.brushColor;
-                ctx.lineWidth = state.brushSize;
-                ctx.lineCap = 'round';
-                ctx.stroke();
-            } else if (state.tool === 'smudge') {
-                // SOTA Smudge implementation (Pixel displacement)
-                const dist = Math.hypot(mouse.x - state.lastMouse.x, mouse.y - state.lastMouse.y);
-                const angle = Math.atan2(mouse.y - state.lastMouse.y, mouse.x - state.lastMouse.x);
-                
-                // Interpolate for smoother smudge
-                const steps = Math.ceil(dist / 2); 
-                for(let i=0; i<steps; i++) {
-                    const t = i/steps;
-                    const cx = state.lastMouse.x + (mouse.x - state.lastMouse.x) * t;
-                    const cy = state.lastMouse.y + (mouse.y - state.lastMouse.y) * t;
-                    smudge(cx, cy, Math.cos(angle), Math.sin(angle));
-                }
-            }
-            
-            state.lastMouse = mouse;
-        }
-
-        function smudge(x, y, dx, dy) {
-            const size = parseInt(state.brushSize);
-            const strength = parseFloat(state.brushStrength); // 0 to 1
-            
-            // Get the patch of pixels under the brush
-            // We pull from "behind" the movement to "push" it forward
-            const srcX = x - (dx * size * strength * 0.5);
-            const srcY = y - (dy * size * strength * 0.5);
-
-            try {
-                // Simple implementation: Draw a slice of the canvas onto itself slightly offset
-                // This mimics "pushing" paint
-                ctx.drawImage(
-                    canvas, 
-                    srcX - size/2, srcY - size/2, size, size, // Source
-                    x - size/2 + (dx * 2), y - size/2 + (dy * 2), size, size // Destination
-                );
-            } catch (e) { /* boundary issues ignore */ }
-        }
-
-        // Events
-        canvas.addEventListener('mousedown', startStroke);
-        canvas.addEventListener('touchstart', startStroke, {passive: false});
-        
-        window.addEventListener('mouseup', endStroke);
-        window.addEventListener('touchend', endStroke);
-        
-        canvas.addEventListener('mousemove', moveStroke);
-        canvas.addEventListener('touchmove', moveStroke, {passive: false});
-
-
-        // --- UI Interactions ---
+        document.getElementById('undoBtn').addEventListener('click', () => App.undo());
+        document.getElementById('redoBtn').addEventListener('click', () => App.redo());
 
         // Tools
         document.querySelectorAll('.tool-btn').forEach(btn => {
             btn.addEventListener('click', () => {
-                document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active', 'bg-blue-600', 'text-white'));
-                document.querySelectorAll('.tool-btn').forEach(b => b.classList.add('bg-zinc-800', 'text-zinc-400'));
+                document.querySelectorAll('.tool-btn').forEach(b => {
+                    b.classList.remove('text-blue-500', 'active');
+                    b.classList.add('text-zinc-400');
+                    b.querySelector('span').classList.remove('font-bold');
+                });
+                btn.classList.add('text-blue-500', 'active');
+                btn.classList.remove('text-zinc-400');
+                btn.querySelector('span').classList.add('font-bold');
                 
-                btn.classList.add('active', 'bg-blue-600', 'text-white');
-                btn.classList.remove('bg-zinc-800', 'text-zinc-400');
-                state.tool = btn.dataset.tool;
+                App.tool = btn.dataset.tool;
+                
+                // Show gesture hint if move
+                if(App.tool === 'move') {
+                    // document.getElementById('gesture-hint').classList.remove('hidden');
+                }
             });
-        });
-
-        document.getElementById('brushSize').addEventListener('input', (e) => {
-            state.brushSize = e.target.value;
-            document.getElementById('sizeVal').innerText = state.brushSize;
-        });
-
-        document.getElementById('brushStrength').addEventListener('input', (e) => {
-            state.brushStrength = e.target.value / 100;
-            document.getElementById('strengthVal').innerText = e.target.value + '%';
-        });
-
-        document.getElementById('colorPicker').addEventListener('input', (e) => {
-            state.brushColor = e.target.value;
-        });
-
-        document.getElementById('onionSkin').addEventListener('change', (e) => {
-            state.onionSkin = e.target.checked;
-            loadFrame(state.currentFrameIndex);
-        });
-
-        document.getElementById('gifDelay').addEventListener('input', (e) => {
-            state.gifDelay = e.target.value;
-            document.getElementById('delayVal').innerText = state.gifDelay;
-        });
-
-        // Frame Ops
-        document.getElementById('dupFrameBtn').addEventListener('click', () => {
-            if(state.frames.length === 0) return;
-            // Get current frame data
-            const currentData = ctx.getImageData(0,0,canvas.width, canvas.height);
-            // Insert after current
-            state.frames.splice(state.currentFrameIndex + 1, 0, currentData);
-            state.currentFrameIndex++;
-            renderTimeline();
-            loadFrame(state.currentFrameIndex);
-        });
-
-        document.getElementById('delFrameBtn').addEventListener('click', () => {
-            if (state.frames.length <= 1) return; // Keep at least one
-            state.frames.splice(state.currentFrameIndex, 1);
-            if(state.currentFrameIndex >= state.frames.length) state.currentFrameIndex = state.frames.length - 1;
-            renderTimeline();
-            loadFrame(state.currentFrameIndex);
-        });
-
-        document.getElementById('clearBtn').addEventListener('click', () => {
-            if(confirm('Clear project?')) {
-                state.frames = [];
-                ctx.clearRect(0,0,canvas.width, canvas.height);
-                ctx.fillStyle = "white"; ctx.fillRect(0,0,canvas.width, canvas.height);
-                saveCurrentStateAsNewFrame();
-                renderTimeline();
-                document.getElementById('videoControls').classList.add('hidden');
-            }
         });
 
         // Playback
         document.getElementById('playBtn').addEventListener('click', () => {
-            if (state.isPlaying) return;
-            state.isPlaying = true;
-            let idx = state.currentFrameIndex;
-            
-            state.playInterval = setInterval(() => {
-                idx = (idx + 1) % state.frames.length;
-                loadFrame(idx); // Note: Onion skin might look weird during playback, could disable it momentarily
-            }, state.gifDelay);
+            if(App.isPlaying) return;
+            App.isPlaying = true;
+            let i = App.currentFrame;
+            App.playInterval = setInterval(() => {
+                i = (i + 1) % App.frames.length;
+                App.loadFrame(i);
+            }, 100); // 100ms default
         });
 
         document.getElementById('stopBtn').addEventListener('click', () => {
-            state.isPlaying = false;
-            clearInterval(state.playInterval);
+            App.isPlaying = false;
+            clearInterval(App.playInterval);
         });
 
+        // Frame Ops
+        document.getElementById('dupFrame').addEventListener('click', () => {
+            const current = App.frames[App.currentFrame];
+            const copy = new ImageData(new Uint8ClampedArray(current.data), current.width, current.height);
+            App.frames.splice(App.currentFrame + 1, 0, copy);
+            App.currentFrame++;
+            App.saveHistory();
+            App.loadFrame(App.currentFrame);
+            App.renderTimeline();
+        });
 
-        // --- EXPORT LOGIC ---
-        // GIF.js worker needs to be blobified for single file
-        const workerBlob = new Blob([`
-            importScripts('https://cdnjs.cloudflare.com/ajax/libs/gif.js/0.2.0/gif.worker.js');
-        `], { type: 'application/javascript' });
+        document.getElementById('delFrame').addEventListener('click', () => {
+            if(App.frames.length <= 1) return;
+            App.frames.splice(App.currentFrame, 1);
+            if(App.currentFrame >= App.frames.length) App.currentFrame = App.frames.length -1;
+            App.saveHistory();
+            App.loadFrame(App.currentFrame);
+            App.renderTimeline();
+        });
+
+        // Export
+        const workerBlob = new Blob([`importScripts('https://cdnjs.cloudflare.com/ajax/libs/gif.js/0.2.0/gif.worker.js');`], { type: 'application/javascript' });
         const workerUrl = URL.createObjectURL(workerBlob);
 
         document.getElementById('exportBtn').addEventListener('click', () => {
-            if(state.frames.length === 0) return;
-            
-            showLoader(true, "Rendering GIF...");
+            const loader = document.getElementById('loader');
+            const txt = document.getElementById('loaderText');
+            loader.classList.remove('hidden');
+            txt.innerText = "RENDERING GIF...";
 
             const gif = new GIF({
                 workers: 2,
                 quality: 10,
-                width: canvas.width,
-                height: canvas.height,
+                width: App.width,
+                height: App.height,
                 workerScript: workerUrl
             });
 
-            // Add frames
-            const tempC = document.createElement('canvas');
-            tempC.width = canvas.width;
-            tempC.height = canvas.height;
-            const tCtx = tempC.getContext('2d');
+            // Draw to temp canvas to ensure no transparency issues if any
+            const tC = document.createElement('canvas');
+            tC.width = App.width; tC.height = App.height;
+            const tCtx = tC.getContext('2d');
 
-            state.frames.forEach(frameData => {
-                tCtx.putImageData(frameData, 0, 0);
-                gif.addFrame(tCtx, {copy: true, delay: parseInt(state.gifDelay)});
+            App.frames.forEach(f => {
+                tCtx.clearRect(0,0,App.width, App.height);
+                tCtx.fillStyle = '#fff'; 
+                tCtx.fillRect(0,0,App.width, App.height);
+                tCtx.putImageData(f, 0, 0);
+                gif.addFrame(tCtx, {copy: true, delay: 100});
             });
 
-            gif.on('finished', (blob) => {
-                showLoader(false);
+            gif.on('finished', blob => {
+                loader.classList.add('hidden');
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url;
-                a.download = 'morph-animation.gif';
+                a.download = 'jiggle-animation.gif';
                 document.body.appendChild(a);
                 a.click();
                 document.body.removeChild(a);
             });
-
+            
             gif.render();
         });
 
-        function showLoader(show, text="Loading...") {
-            loader.classList.toggle('hidden', !show);
-            loaderText.innerText = text;
-        }
-
         // Start
-        init();
+        App.init();
 
     </script>
 </body>
