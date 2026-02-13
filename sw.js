@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'morphframe-v1.1.2'; // INCREMENT THIS TO FORCE UPDATE
+const CACHE_VERSION = 'morphframe-v1.1.3'; // INCREMENT THIS TO FORCE UPDATE
 const FILES_TO_CACHE = [
     './',
     './index.html',
